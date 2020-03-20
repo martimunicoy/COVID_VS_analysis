@@ -183,7 +183,7 @@ def counter_barplot(dictionary):
             ys.append(np.mean(_ys))
             ylabels.append(residue)
             sub_ys += _ys
-            if (color_index < 10):
+            if (color_index < 9):
                 color_index += 1
             else:
                 color_index = 0
@@ -197,7 +197,7 @@ def counter_barplot(dictionary):
     for sub_x, sub_y, sub_ylabel in zip(sub_xs, sub_ys, sub_ylabels):
         ax.text(sub_x + offset, sub_y, sub_ylabel,
                 horizontalalignment='center', verticalalignment='center',
-                size=10)
+                size=8)
 
     ax.set_facecolor('whitesmoke')
 
