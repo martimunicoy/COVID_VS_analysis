@@ -72,7 +72,7 @@ def count_residues(hbond_atoms):
 def create_barplot(dictionary):
     plt.bar(range(len(dictionary)), list(dictionary.values()), align='center')
     plt.xticks(range(len(dictionary)), list(dictionary.keys()))
-    plt.xticks(rotation=90)
+    plt.xticks(rotation=45)
 
 
 def main():
@@ -89,7 +89,9 @@ def main():
     hbond_atoms = get_hbond_atoms_from_df(df)
     counting = count_residues(hbond_atoms)
     create_barplot(counting)
+    plt.show()
     plt.savefig("test.png")
+
 
 
 if __name__ == "__main__":
