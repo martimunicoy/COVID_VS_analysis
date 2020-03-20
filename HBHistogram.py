@@ -54,9 +54,12 @@ def create_df(hb_path):
 def get_hbond_atoms_from_df(df):
     hbond_atoms = []
     for row in df:
-        residues = row[3].split(",")[:-1]
-        for residue in residues:
-            hbond_atoms.append(residue.split(":"))
+        try:
+            residues = row[3].split(",")[:-1]
+            for residue in residues:
+                hbond_atoms.append(residue.split(":"))
+        except IndexError:
+            pass
     return hbond_atoms
 
 
