@@ -103,14 +103,17 @@ def count_frequencies(residues_dict, total):
     return residues_dict
 
 
-def discard_low_frequent(residues_dict, total, lim=0.1):
-    new_dict = {}
+def discard_low_frequent(residues_dict, total, dict_to_update=None, lim=0.1):
     for name, residue in residues_dict.items():
         for atom, count in residue.items():
             freq = transform_count_to_freq(count, total)
-            if not freq < lim:
-                new_dict.setdefault(name, []).append(atom)
-    return new_dict 
+        if not freq < lim:
+            if not name in dict_to_update.keys():
+                dictionary = {}
+                dictionary[atom] = dictionary.get(atom, 0) + 1
+                dict_to_update[name] = dictionary
+            else:
+                dict_to_update[name][atom] = dict_to_update[name].get(atom, 0) + 1
 
 
 def create_barplot(dictionary):
@@ -140,7 +143,6 @@ def join_results(general_dict, mode):
             for atom, array_of_results in residue_dict.items():
                 residue_dict[atom] = sum(array_of_results) / len(array_of_results)
 
-
 def main():
     hb_paths, mode = parse_args()
 
@@ -158,10 +160,13 @@ def main():
         counting = count_atoms_from_residue(hbond_atoms)
         if mode == "relative_frequency":
             counting = count_frequencies(counting, total)
-        append_simulation_counting(general_results, counting)
+        if mode == "relative_frequency" or mode == "count":
+            append_simulation_counting(general_results, counting)
         if mode == "frequent_interactions":
-            counting = discard_low_frequent(counting, total, lim=0.1)
-    join_results(general_results, mode)
+            discard_low_frequent(counting, total, general_results, lim=0.1)
+    if mode != "frequent_interactions":
+        join_results(general_results, mode)
+    print(general_results)
 
 
 if __name__ == "__main__":
