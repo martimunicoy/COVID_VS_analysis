@@ -160,9 +160,17 @@ def counter_barplot(dictionary):
     cmap = cm.get_cmap('tab10')
     color_index = 0
 
+    max_freq = 0
+    for residue, atom_freq in dictionary.items():
+        for atom, freq in atom_freq.items():
+            if (freq > max_freq):
+                max_freq = freq
+
     for residue, atom_freq in dictionary.items():
         _ys = []
         for atom, freq in atom_freq.items():
+            if (freq < max_freq / 100):
+                continue
             _ys.append(y)
             sub_ylabels.append(atom)
             sub_xs.append(freq)
@@ -180,7 +188,7 @@ def counter_barplot(dictionary):
     plt.ylabel('Residues', fontweight='bold')
     plt.yticks(ys, ylabels)
 
-    offset = max(sub_xs) * 0.05
+    offset = max_freq * 0.05
 
     for sub_x, sub_y, sub_ylabel in zip(sub_xs, sub_ys, sub_ylabels):
         ax.text(sub_x + offset, sub_y, sub_ylabel,
