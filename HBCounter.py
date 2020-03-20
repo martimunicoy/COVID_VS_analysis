@@ -4,8 +4,6 @@
 
 # Standard imports
 import argparse as ap
-import glob
-from pathlib import Path
 from multiprocessing import Pool
 from functools import partial
 
@@ -13,7 +11,8 @@ from functools import partial
 import mdtraj as md
 
 # PELE imports
-from PELETools.External import hbond_mod as hbm
+from Helpers.PELEIterator import SimIt
+from Helpers import hbond_mod as hbm
 
 # Script information
 __author__ = "Marti Municoy, Carles Perez"
@@ -106,21 +105,14 @@ def main():
     PELE_sim_paths, lig_resname, distance, angle, pseudo_hb, proc_number, \
         topology_relative_path = parse_args()
 
-    PELE_sim_paths_list = []
-    if (type(PELE_sim_paths) == list):
-        for PELE_sim_path in PELE_sim_paths:
-            PELE_sim_paths_list += glob.glob(PELE_sim_path)
-    else:
-        PELE_sim_paths_list = glob.glob(PELE_sim_paths)
+    all_sim_it = SimIt(PELE_sim_paths)
 
     print(' - The following PELE simulation paths will be analyzed:')
-    for PELE_sim_path in PELE_sim_paths_list:
+    for PELE_sim_path in all_sim_it:
         print('   - {}'.format(PELE_sim_path))
 
-    for PELE_sim_path in PELE_sim_paths_list:
+    for PELE_sim_path in all_sim_it:
         print(' - Analyzing {}'.format(PELE_sim_path))
-        PELE_sim_path = Path(PELE_sim_path)
-        PELE_output_path = PELE_sim_path.joinpath('output')
         topology_path = PELE_sim_path.joinpath(topology_relative_path)
 
         if (not topology_path.is_file()):
@@ -144,20 +136,23 @@ def main():
                                     distance, angle, pseudo_hb, topology_path,
                                     chain_ids)
 
-        for epoch in PELE_output_path.glob('[0-9]*'):
-            print('   - Analyzing {}'.format(epoch))
-            trajectories = [traj for traj in epoch.glob('trajectory*xtc')]
-            with Pool(proc_number) as pool:
-                results = pool.map(parallel_function,
-                                   trajectories)
-                counter = 0
-                for r in results:
-                    counter += len(r.values())
-                print('     - {} H bonds were found'.format(counter))
+        sim_it = SimIt(PELE_sim_path)
+        sim_it.build_traj_it('output', 'trajectory', 'xtc')
 
-            for r, t in zip(results, trajectories):
-                hbonds_dict[int(t.parent.name),
-                            int(''.join(filter(str.isdigit, t.name)))] = r
+        trajectories = [traj for traj in sim_it.traj_it]
+        with Pool(proc_number) as pool:
+            results = pool.map(parallel_function,
+                               trajectories)
+
+        counter = 0
+        for r in results:
+            counter += len(r.values())
+
+        print('     - {} H bonds were found'.format(counter))
+
+        for r, t in zip(results, trajectories):
+            hbonds_dict[int(t.parent.name),
+                        int(''.join(filter(str.isdigit, t.name)))] = r
 
         with open(str(PELE_sim_path.joinpath('hbonds.out')), 'w') as file:
             file.write(str(PELE_sim_path.name) + '\n')
