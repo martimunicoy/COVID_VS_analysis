@@ -64,8 +64,8 @@ def count_residues(hbond_atoms):
     counts = {}
     for hbond_atom in hbond_atoms:
         chain, residue, atom = hbond_atom
-        counts[(chain, residue, atom)] = \
-            counts.get((chain, residue, atom), 0) + 1
+        counts["{}-{}-{}".format(chain, residue, atom)] = \
+            counts.get("{}-{}-{}".format(chain, residue, atom), 0) + 1
     return counts
 
 
@@ -89,7 +89,7 @@ def main():
     hbond_atoms = get_hbond_atoms_from_df(df)
     counting = count_residues(hbond_atoms)
     create_barplot(counting)
-    plt.show()
+    plt.savefig("test.png")
 
 
 if __name__ == "__main__":

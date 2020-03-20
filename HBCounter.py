@@ -13,7 +13,7 @@ from functools import partial
 import mdtraj as md
 
 # PELE imports
-from PELETools.External import hbond_mod as hbm
+from Helpers import hbond_mod as hbm
 
 # Script information
 __author__ = "Marti Municoy, Carles Perez"
