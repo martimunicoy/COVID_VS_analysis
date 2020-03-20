@@ -192,7 +192,7 @@ def counter_barplot(dictionary):
     plt.ylabel('Residues', fontweight='bold')
     plt.yticks(ys, ylabels)
 
-    offset = max_freq * 0.05
+    offset = max_freq * 0.01
 
     for sub_x, sub_y, sub_ylabel in zip(sub_xs, sub_ys, sub_ylabels):
         ax.text(sub_x + offset, sub_y, sub_ylabel,
