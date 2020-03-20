@@ -13,7 +13,7 @@ from functools import partial
 import mdtraj as md
 
 # PELE imports
-from Helpers import hbond_mod as hbm
+from PELETools.External import hbond_mod as hbm
 
 # Script information
 __author__ = "Marti Municoy, Carles Perez"
@@ -158,16 +158,16 @@ def main():
             file.write('Epoch    Trajectory    Model    Hbonds' + '\n')
             for (epoch, traj_num), hbonds in hbonds_dict.items():
                 for model, hbs in hbonds.items():
-                    if (len(hbs) > 0):
-                        file.write('{:5d}    {:10d}    {:5d}    '.format(
-                            epoch, traj_num, model))
+                    file.write('{:5d}    {:10d}    {:5d}    '.format(
+                        epoch, traj_num, model))
 
+                    if (len(hbs) > 0):
                         for hb in hbs[:-1]:
                             file.write('{},'.format(hb))
 
                         file.write('{}'.format(hbs[-1]))
 
-                        file.write('\n')
+                    file.write('\n')
 
 
 if __name__ == "__main__":
