@@ -223,9 +223,6 @@ def main():
             discard_low_frequent(counting, total, general_results, lim=0.1)
     if mode != "frequent_interactions":
         join_results(general_results, mode)
-    print(general_results)
-
-    print(counting)
 
     create_barplot(general_results)
 
