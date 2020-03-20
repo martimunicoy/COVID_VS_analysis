@@ -7,8 +7,10 @@ import glob
 from collections import defaultdict
 
 # External imports
+import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
-
+from matplotlib import cm
 
 # Script information
 __author__ = "Marti Municoy, Carles Perez"
@@ -110,13 +112,7 @@ def discard_low_frequent(residues_dict, total, lim=0.1):
             freq = transform_count_to_freq(count, total)
             if not freq < lim:
                 new_dict.setdefault(name, []).append(atom)
-    return new_dict 
-
-
-def create_barplot(dictionary):
-    plt.bar(range(len(dictionary)), list(dictionary.values()), align='center')
-    plt.xticks(range(len(dictionary)), list(dictionary.keys()))
-    plt.xticks(rotation=45)
+    return new_dict
 
 
 def append_simulation_counting(general_dict_results, new_info_dict):
@@ -133,12 +129,71 @@ def append_simulation_counting(general_dict_results, new_info_dict):
 def join_results(general_dict, mode):
     if mode == "count":
         for resname, residue_dict in general_dict.items():
-            for atom, array_of_results in residue_dict.items():        
+            for atom, array_of_results in residue_dict.items():
                 residue_dict[atom] = sum(array_of_results)
     if mode == "relative_frequency":
         for resname, residue_dict in general_dict.items():
             for atom, array_of_results in residue_dict.items():
                 residue_dict[atom] = sum(array_of_results) / len(array_of_results)
+
+
+def create_barplot(dictionary):
+    """
+    atom_name_set = set()
+    x = range(0, len(dictionary.keys()))
+    max_atom_names = []
+    for residue, atom_freq in dictionary.items():
+        max_atom_names.append(len(atom_freq.keys()))
+        for atom in atom_freq.keys():
+            atom_name_set.add(atom)
+
+    max_atom_names = max(max_atom_names)
+    """
+    fig, ax = plt.subplots(1)
+
+    # y ticks and labels handlers
+    y = 0.5
+    ys = []
+    sub_ys = []
+    sub_xs = []
+    ylabels = []
+    sub_ylabels = []
+
+    # colormap handlers
+    norm = matplotlib.colors.Normalize(0, 10)
+    cmap = cm.get_cmap('tab10')
+    color_index = 0
+
+    for residue, atom_freq in dictionary.items():
+        _ys = []
+        for atom, freq in atom_freq.items():
+            _ys.append(y)
+            sub_ylabels.append(atom)
+            sub_xs.append(freq)
+            plt.barh(y, freq, align='center', color=cmap(norm(color_index)))
+            y += 1
+        ys.append(np.mean(_ys))
+        ylabels.append(residue)
+        sub_ys += _ys
+        if (color_index < 10):
+            color_index += 1
+        else:
+            color_index = 0
+        y += 0.5
+
+    plt.ylabel('Residues', fontweight='bold')
+    plt.yticks(ys, ylabels)
+
+    offset = max(sub_xs) * 0.05
+
+    for sub_x, sub_y, sub_ylabel in zip(sub_xs, sub_ys, sub_ylabels):
+        ax.text(sub_x + offset, sub_y, sub_ylabel,
+                horizontalalignment='center', verticalalignment='center',
+                size=10)
+
+    ax.set_facecolor('whitesmoke')
+
+    plt.show()
 
 
 def main():
@@ -162,6 +217,11 @@ def main():
         if mode == "frequent_interactions":
             counting = discard_low_frequent(counting, total, lim=0.1)
     join_results(general_results, mode)
+
+    print(counting)
+
+    create_barplot(general_results)
+
 
 
 if __name__ == "__main__":
