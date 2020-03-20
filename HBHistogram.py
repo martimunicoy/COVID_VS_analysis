@@ -4,6 +4,7 @@
 # Standard imports
 import argparse as ap
 import glob
+from collections import defaultdict
 
 # External imports
 import matplotlib.pyplot as plt
@@ -22,21 +23,24 @@ def parse_args():
     parser.add_argument("hbonds_data_paths", metavar="PATH", type=str,
                         nargs='*',
                         help="Path to H bonds data files")
+    parser.add_argument("-m", "--mode", choices={"count", "frequent_interactions", "relative_frequency"},
+                       default="count",
+                       help="Selection of computation mode: (1)count - sum of all residues interacting, "
+                            "(2)frequent_interactions - sum of interactions present at least in a 10% "
+                            "of the structures of the simulation, (3)relative_frequency - mean of interacting "
+                            "residues frequencies for each ligand.")
 
     args = parser.parse_args()
 
-    return args.hbonds_data_paths
+    return args.hbonds_data_paths, args.mode
 
 
-def create_df(hb_paths):
+def create_df(hb_path):
     rows_df = []
-
-    for hb_path in hb_paths:
-        with open(hb_path) as file:
-            rows = file.readlines()
-            for row in rows[2:]:
-                rows_df.append(row.split())
-
+    with open(hb_path) as file:
+        rows = file.readlines()
+        for row in rows[2:]:
+            rows_df.append(row.split())
     return rows_df
 
 
@@ -69,6 +73,46 @@ def count_residues(hbond_atoms):
     return counts
 
 
+def count_atoms_from_residue(hbond_atoms):
+    residues = []
+    res_dict = {}
+    for hbond_atom in hbond_atoms:
+        chain, residue, atom = hbond_atom
+        res_id = "{}-{}".format(chain, residue)
+        residues.append(res_id)
+    for res in residues:
+        atoms_dict = {}
+        for hbond_atom in hbond_atoms:
+            chain, residue, atom = hbond_atom
+            res_id = "{}-{}".format(chain, residue)
+            if res == res_id:
+                atoms_dict[atom] = atoms_dict.get(atom, 0) + 1
+        res_dict[res] = atoms_dict
+    return res_dict
+
+
+def transform_count_to_freq(value, total):
+    freq = value / total
+    return freq
+
+
+def count_frequencies(residues_dict, total):
+    for name, residue in residues_dict.items():
+        for atom, count in residue.items():
+            residue[atom] = transform_count_to_freq(count, total)
+    return residues_dict
+
+
+def discard_low_frequent(residues_dict, total, lim=0.1):
+    new_dict = {}
+    for name, residue in residues_dict.items():
+        for atom, count in residue.items():
+            freq = transform_count_to_freq(count, total)
+            if not freq < lim:
+                new_dict.setdefault(name, []).append(atom)
+    return new_dict 
+
+
 def create_barplot(dictionary):
     plt.bar(range(len(dictionary)), list(dictionary.values()), align='center')
     plt.xticks(range(len(dictionary)), list(dictionary.keys()))
@@ -76,7 +120,7 @@ def create_barplot(dictionary):
 
 
 def main():
-    hb_paths = parse_args()
+    hb_paths, mode = parse_args()
 
     hb_paths_list = []
     if (type(hb_paths) == list):
@@ -84,13 +128,22 @@ def main():
             hb_paths_list += glob.glob(hb_path)
     else:
         hb_paths_list = glob.glob(hb_paths)
-
-    df = create_df(hb_paths_list)
-    hbond_atoms = get_hbond_atoms_from_df(df)
-    counting = count_residues(hbond_atoms)
-    create_barplot(counting)
-    plt.show()
-    plt.savefig("test.png")
+    simulation_results = {}
+    for hb_path in hb_paths_list:
+        df = create_df(hb_path)
+        hbond_atoms = get_hbond_atoms_from_df(df)
+        total = len(hbond_atoms)
+        counting = count_atoms_from_residue(hbond_atoms)
+        if mode == "relative_frequency":
+            counting = count_frequencies(counting, total)
+        if mode == "frequent_interactions":
+            counting = discard_low_frequent(counting, total, lim=0.1)
+        print(counting)
+        simulation_results[hb_path] = counting
+    print(simulation_results)
+#    create_barplot(counting)
+#    plt.show()
+#    plt.savefig("test.png")
 
 
 
