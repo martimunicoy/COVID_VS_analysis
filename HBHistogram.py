@@ -176,7 +176,7 @@ def counter_barplot(dictionary):
             sub_ylabels.append(atom)
             sub_xs.append(freq)
             plt.barh(y, freq, align='center', color=cmap(norm(color_index)))
-            y += 0.75
+            y += 0.9
             jump = True
 
         if (jump):
