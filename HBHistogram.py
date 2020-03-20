@@ -196,7 +196,7 @@ def counter_barplot(dictionary):
 
     for sub_x, sub_y, sub_ylabel in zip(sub_xs, sub_ys, sub_ylabels):
         ax.text(sub_x + offset, sub_y, sub_ylabel.strip(),
-                horizontalalignment='right', verticalalignment='center',
+                horizontalalignment='left', verticalalignment='center',
                 size=7)
 
     ax.set_facecolor('whitesmoke')
