@@ -56,7 +56,13 @@ def parse_args():
 
 def find_hbonds_in_trajectory(lig_resname, distance, angle, pseudo,
                               topology_path, chain_ids, traj_path):
-    traj = md.load_xtc(str(traj_path), top=str(topology_path))
+    try:
+        traj = md.load_xtc(str(traj_path), top=str(topology_path))
+    except OSError:
+        print('     - Warning: problems loading trajectory '
+              '{}, it will be ignored'.format(traj_path))
+        return {}
+
     lig = traj.topology.select('resname {}'.format(lig_resname))
     hbonds_in_traj = find_ligand_hbonds(traj, lig, distance, angle, pseudo,
                                         chain_ids)
