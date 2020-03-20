@@ -119,6 +119,28 @@ def create_barplot(dictionary):
     plt.xticks(rotation=45)
 
 
+def append_simulation_counting(general_dict_results, new_info_dict):
+    for name, residue in new_info_dict.items():
+        for atom, count in residue.items():
+            if not name in general_dict_results.keys():
+                res = {}
+                res.setdefault(atom, []).append(count)
+                general_dict_results[name] = res
+            else:
+                general_dict_results[name].setdefault(atom, []).append(count)
+
+
+def join_results(general_dict, mode):
+    if mode == "count":
+        for resname, residue_dict in general_dict.items():
+            for atom, array_of_results in residue_dict.items():        
+                residue_dict[atom] = sum(array_of_results)
+    if mode == "relative_frequency":
+        for resname, residue_dict in general_dict.items():
+            for atom, array_of_results in residue_dict.items():
+                residue_dict[atom] = sum(array_of_results) / len(array_of_results)
+
+
 def main():
     hb_paths, mode = parse_args()
 
@@ -128,7 +150,7 @@ def main():
             hb_paths_list += glob.glob(hb_path)
     else:
         hb_paths_list = glob.glob(hb_paths)
-    simulation_results = {}
+    general_results = {}
     for hb_path in hb_paths_list:
         df = create_df(hb_path)
         hbond_atoms = get_hbond_atoms_from_df(df)
@@ -136,15 +158,10 @@ def main():
         counting = count_atoms_from_residue(hbond_atoms)
         if mode == "relative_frequency":
             counting = count_frequencies(counting, total)
+        append_simulation_counting(general_results, counting)
         if mode == "frequent_interactions":
             counting = discard_low_frequent(counting, total, lim=0.1)
-        print(counting)
-        simulation_results[hb_path] = counting
-    print(simulation_results)
-#    create_barplot(counting)
-#    plt.show()
-#    plt.savefig("test.png")
-
+    join_results(general_results, mode)
 
 
 if __name__ == "__main__":
