@@ -192,12 +192,12 @@ def counter_barplot(dictionary):
     plt.ylabel('Residues', fontweight='bold')
     plt.yticks(ys, ylabels)
 
-    offset = max_freq * 0.01
+    offset = max_freq * 0.025
 
     for sub_x, sub_y, sub_ylabel in zip(sub_xs, sub_ys, sub_ylabels):
-        ax.text(sub_x + offset, sub_y, sub_ylabel,
+        ax.text(sub_x + offset, sub_y, strip(sub_ylabel),
                 horizontalalignment='center', verticalalignment='center',
-                size=8)
+                size=7)
 
     ax.set_facecolor('whitesmoke')
 
