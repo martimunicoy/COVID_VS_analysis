@@ -164,6 +164,8 @@ def main():
             file.write('Epoch    Trajectory    Model    Hbonds' + '\n')
             for (epoch, traj_num), hbonds in hbonds_dict.items():
                 for model, hbs in hbonds.items():
+                    if int(epoch) == 0 and int(model) == 0:
+                        continue
                     file.write('{:5d}    {:10d}    {:5d}    '.format(
                         epoch, traj_num, model))
 
