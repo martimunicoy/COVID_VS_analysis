@@ -180,10 +180,10 @@ def generate_barplot(dictionary, mode, lim):
             if (freq > max_freq):
                 max_freq = freq
 
-    for residue, atom_freq in dictionary.items():
+    for residue, atom_freq in sorted(dictionary.items()):
         _ys = []
         jump = False
-        for atom, freq in atom_freq.items():
+        for atom, freq in sorted(atom_freq.items()):
             if (freq < max_freq / 100):
                 continue
             _ys.append(y)
