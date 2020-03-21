@@ -83,8 +83,12 @@ def count(hbond_atoms):
 
 
 def count_norm(hbond_atoms):
-    norm_factor = 1 / len(hbond_atoms)
     counter = defaultdict(dict)
+
+    if (len(hbond_atoms) == 0):
+        return counter
+
+    norm_factor = 1 / len(hbond_atoms)
 
     for (chain, residue, atom) in hbond_atoms:
         counter[(chain, residue)][atom] = \
