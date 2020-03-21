@@ -25,24 +25,37 @@ def parse_args():
     parser.add_argument("hbonds_data_paths", metavar="PATH", type=str,
                         nargs='*',
                         help="Path to H bonds data files")
-    parser.add_argument("-m", "--mode", choices={"count",
+
+    parser.add_argument("-m", "--mode", choices=["count",
                                                  "frequent_interactions",
-                                                 "relative_frequency"},
+                                                 "relative_frequency"],
+                        type=str, metavar="MODE",
                         default="count",
                         help="Selection of computation mode: " +
-                        "(1)count - sum of all residues interacting, " +
-                        "(2)frequent_interactions - sum of interactions " +
-                        "present at least in a 10\% of the structures of" +
-                        " the simulation, (3)relative_frequency - mean " +
+                        "(1) count - sum of all residues interacting, " +
+                        "(2) frequent_interactions - sum of interactions " +
+                        "present at least in a 10%% of the structures of" +
+                        " the simulation, (3) relative_frequency - mean " +
                         "of interacting residues frequencies for each " +
                         "ligand.")
     parser.add_argument("-l", "--lim",
                         metavar="L", type=float, default='0.1',
                         help="Frequency limit for frequent_interations method")
+    parser.add_argument("--epochs_to_ignore", nargs='*',
+                        metavar="N", type=int, default=[],
+                        help="PELE epochs whose H bonds will be ignored")
+    parser.add_argument("--trajectories_to_ignore", nargs='*',
+                        metavar="N", type=int, default=[],
+                        help="PELE trajectories whose H bonds will be ignored")
+    parser.add_argument("--models_to_ignore", nargs='*',
+                        metavar="N", type=int, default=[],
+                        help="PELE models whose H bonds will be ignored")
 
     args = parser.parse_args()
 
-    return args.hbonds_data_paths, args.mode, args.lim
+    return args.hbonds_data_paths, args.mode, args.lim, \
+        args.epochs_to_ignore, args.trajectories_to_ignore, \
+        args.models_to_ignore
 
 
 def create_df(hb_path):
@@ -54,16 +67,22 @@ def create_df(hb_path):
     return rows_df
 
 
-def get_hbond_atoms_from_df(df, hb_path):
+def get_hbond_atoms_from_df(df, hb_path, epochs_to_ignore,
+                            trajectories_to_ignore, models_to_ignore):
     hbond_atoms = []
 
     for row in df:
         try:
-            epoch, trajectory, model = row[0:3]
-        except IndexError:
-            print ("   - get_hbond_atoms_from_df Warning: found row with non" +
+            epoch, trajectory, model = map(int, row[0:3])
+        except (IndexError, ValueError):
+            print ("get_hbond_atoms_from_df Warning: found row with non" +
                    " valid format at {}:".format(hb_path))
-            print("     {}".format(row))
+            print(" {}".format(row))
+
+        if ((epoch in epochs_to_ignore) or
+            (trajectory in trajectories_to_ignore) or
+                (model in models_to_ignore)):
+            continue
 
         try:
             residues = row[3].split(',')
@@ -210,7 +229,7 @@ def generate_barplot(dictionary, mode, lim):
         plt.xlabel('Absolut H bond counts', fontweight='bold')
 
     elif (mode == "relative_frequency"):
-        plt.xlabel('Relative H bond frequency', fontweight='bold')
+        plt.xlabel('Average of relative H bond frequencies', fontweight='bold')
 
     elif (mode == "frequent_interactions"):
         plt.xlabel('Absolut H bonds counts with frequencies above ' +
@@ -229,7 +248,8 @@ def generate_barplot(dictionary, mode, lim):
 
 
 def main():
-    hb_paths, mode, lim = parse_args()
+    hb_paths, mode, lim, epochs_to_ignore, trajectories_to_ignore, \
+        models_to_ignore = parse_args()
 
     hb_paths_list = []
     if (type(hb_paths) == list):
@@ -240,7 +260,10 @@ def main():
     general_results = {}
     for hb_path in hb_paths_list:
         df = create_df(hb_path)
-        hbond_atoms = get_hbond_atoms_from_df(df, hb_path)
+        hbond_atoms = get_hbond_atoms_from_df(df, hb_path,
+                                              epochs_to_ignore,
+                                              trajectories_to_ignore,
+                                              models_to_ignore)
 
         if (mode == "count"):
             counter = count(hbond_atoms)
