@@ -55,6 +55,8 @@ def main():
 
     all_sim_it = SimIt(PELE_sim_paths)
 
+    models_counter = {}
+
     for PELE_sim_path in all_sim_it:
         sim_it = SimIt(PELE_sim_path)
         sim_it.build_repo_it(output_path, 'report')
@@ -64,14 +66,16 @@ def main():
             results = pool.map(parallel_models_counter,
                                reports)
 
-        print('Results:')
-        for repo, result in zip(reports, results):
-            print(' - {:<100}: {:10d} models'.format(str(repo), result))
+        models_counter[PELE_sim_path] = sum(results)
 
-        print('Warnings:')
-        for repo, result in zip(reports, results):
-            if (result < warning_threshold):
-                print(' - {:<100}: {:10d} models'.format(str(repo), result))
+    print('Results:')
+    for sim, result in models_counter.items():
+        print(' - {:<100}: {:10d} models'.format(str(sim), result))
+
+    print('Warnings:')
+    for sim, result in models_counter.items():
+        if (result < warning_threshold):
+            print(' - {:<100}: {:10d} models'.format(str(sim), result))
 
 
 if __name__ == "__main__":
