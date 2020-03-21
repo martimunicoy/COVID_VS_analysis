@@ -36,10 +36,13 @@ def parse_args():
                         " the simulation, (3)relative_frequency - mean " +
                         "of interacting residues frequencies for each " +
                         "ligand.")
+    parser.add_argument("-l", "--lim",
+                        metavar="L", type=float, default='0.1',
+                        help="Frequency limit for frequent_interations method")
 
     args = parser.parse_args()
 
-    return args.hbonds_data_paths, args.mode
+    return args.hbonds_data_paths, args.mode, args.lim
 
 
 def create_df(hb_path):
@@ -155,7 +158,7 @@ def combine_results(general_results, mode):
     return combined_results
 
 
-def generate_barplot(dictionary):
+def generate_barplot(dictionary, mode, lim):
     fig, ax = plt.subplots(1)
 
     # y ticks and labels handlers
@@ -203,6 +206,16 @@ def generate_barplot(dictionary):
     plt.ylabel('COVID-19 Mpro residues', fontweight='bold')
     plt.yticks(ys, ['{}:{}'.format(*i) for i in ylabels])
 
+    if (mode == "count"):
+        plt.xlabel('Absolut H bond counts', fontweight='bold')
+
+    elif (mode == "relative_frequency"):
+        plt.xlabel('Relative H bond frequency', fontweight='bold')
+
+    elif (mode == "frequent_interactions"):
+        plt.xlabel('Absolut H bonds counts with frequencies above ' +
+                   '{}'.format(lim), fontweight='bold')
+
     offset = max_freq * 0.025
 
     for sub_x, sub_y, sub_ylabel in zip(sub_xs, sub_ys, sub_ylabels):
@@ -216,7 +229,7 @@ def generate_barplot(dictionary):
 
 
 def main():
-    hb_paths, mode = parse_args()
+    hb_paths, mode, lim = parse_args()
 
     hb_paths_list = []
     if (type(hb_paths) == list):
@@ -237,13 +250,13 @@ def main():
 
         elif mode == "frequent_interactions":
             counter = count_norm(hbond_atoms)
-            counter = discard_non_frequent(counter, lim=0.1)
+            counter = discard_non_frequent(counter, lim)
 
         general_results[hb_path] = counter
 
     combined_results = combine_results(general_results, mode)
 
-    generate_barplot(combined_results)
+    generate_barplot(combined_results, mode, lim)
 
 
 if __name__ == "__main__":
