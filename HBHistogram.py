@@ -51,30 +51,50 @@ def create_df(hb_path):
     return rows_df
 
 
-def get_hbond_atoms_from_df(df):
+def get_hbond_atoms_from_df(df, hb_path):
     hbond_atoms = []
+
     for row in df:
         try:
-            residues = row[3].split(",")[:-1]
+            epoch, trajectory, model = row[0:3]
+        except IndexError:
+            print ("   - get_hbond_atoms_from_df Warning: found row with non" +
+                   " valid format at {}:".format(hb_path))
+            print("     {}".format(row))
+
+        try:
+            residues = row[3].split(',')
             for residue in residues:
                 hbond_atoms.append(residue.split(":"))
         except IndexError:
             pass
+
     return hbond_atoms
 
 
 def count(hbond_atoms):
     counter = defaultdict(dict)
-    for hbond_atom in hbond_atoms:
-        chain, residue, atom = hbond_atom
+
+    for (chain, residue, atom) in hbond_atoms:
         counter[(chain, residue)][atom] = \
             counter[(chain, residue)].get(atom, 0) + 1
+
     return counter
 
 
-def transform_count_to_freq(value, total):
-    freq = value / total
-    return freq
+def count_norm(hbond_atoms):
+    norm_factor = 1 / len(hbond_atoms)
+    counter = defaultdict(dict)
+
+    for (chain, residue, atom) in hbond_atoms:
+        counter[(chain, residue)][atom] = \
+            counter[(chain, residue)].get(atom, 0) + 1
+
+    for residue, atom_freq in counter.items():
+        for atom, freq in atom_freq.items():
+            counter[residue][atom] *= norm_factor
+
+    return counter
 
 
 def normalize(counter, total):
@@ -85,46 +105,22 @@ def normalize(counter, total):
     return counter
 
 
-def discard_low_frequent(residues_dict, total, dict_to_update=None, lim=0.1):
-    for name, residue in residues_dict.items():
-        for atom, count in residue.items():
-            freq = transform_count_to_freq(count, total)
+def discard_non_frequent(counter, lim=0.1):
+    new_counter = defaultdict(dict)
 
-        if not freq < lim:
-            if not name in dict_to_update.keys():
-                dictionary = {}
-                dictionary[atom] = dictionary.get(atom, 0) + 1
-                dict_to_update[name] = dictionary
-            else:
-                dict_to_update[name][atom] = dict_to_update[name].get(atom, 0) + 1
+    for (chain, residue), atom_freq in counter.items():
+        for atom, freq in atom_freq.items():
+            if (freq >= lim):
+                new_counter[(chain, residue)][atom] = \
+                    new_counter[(chain, residue)].get(atom, 0) + 1
 
-
-def append_simulation_counting(general_dict_results, new_info_dict):
-    for name, residue in new_info_dict.items():
-        for atom, count in residue.items():
-            if not name in general_dict_results.keys():
-                res = {}
-                res.setdefault(atom, []).append(count)
-                general_dict_results[name] = res
-            else:
-                general_dict_results[name].setdefault(atom, []).append(count)
-
-
-def join_results(general_dict, mode):
-    if mode == "count":
-        for resname, residue_dict in general_dict.items():
-            for atom, array_of_results in residue_dict.items():
-                residue_dict[atom] = sum(array_of_results)
-    if mode == "relative_frequency":
-        for resname, residue_dict in general_dict.items():
-            for atom, array_of_results in residue_dict.items():
-                residue_dict[atom] = sum(array_of_results) / len(array_of_results)
+    return new_counter
 
 
 def combine_results(general_results, mode):
     combined_results = defaultdict(dict)
 
-    if (mode == "count"):
+    if (mode == "count" or mode == "frequent_interactions"):
         for _, hbonds in general_results.items():
             for residue, atom_freq in hbonds.items():
                 for atom, freq in atom_freq.items():
@@ -133,18 +129,29 @@ def combine_results(general_results, mode):
 
     elif (mode == "relative_frequency"):
         counter = defaultdict(list)
+        atom_set = set()
         for _, hbonds in general_results.items():
             for residue, atom_freq in hbonds.items():
                 for atom, freq in atom_freq.items():
-                    counter[residue + (atom, )].append(freq)
+                    atom_set.add(residue + (atom, ))
+
+        for _, hbonds in general_results.items():
+            for (chain, residue, atom) in atom_set:
+                if (chain, residue) in hbonds:
+                    if (atom in hbonds[(chain, residue)]):
+                        counter[(chain, residue, atom)].append(
+                            hbonds[(chain, residue)][atom])
+                        continue
+
+                counter[(chain, residue, atom)].append(0)
 
         for (chain, residue, atom), freqs in counter.items():
-            combined_results[residue][atom] = np.mean(freqs)
+            combined_results[(chain, residue)][atom] = np.mean(freqs)
 
     return combined_results
 
 
-def counter_barplot(dictionary):
+def generate_barplot(dictionary):
     fig, ax = plt.subplots(1)
 
     # y ticks and labels handlers
@@ -189,7 +196,7 @@ def counter_barplot(dictionary):
                 color_index = 0
             y += 0.5
 
-    plt.ylabel('Residues', fontweight='bold')
+    plt.ylabel('COVID-19 Mpro residues', fontweight='bold')
     plt.yticks(ys, ['{}:{}'.format(*i) for i in ylabels])
 
     offset = max_freq * 0.025
@@ -216,24 +223,23 @@ def main():
     general_results = {}
     for hb_path in hb_paths_list:
         df = create_df(hb_path)
-        hbond_atoms = get_hbond_atoms_from_df(df)
-        total = len(hbond_atoms)
-        counter = count(hbond_atoms)
+        hbond_atoms = get_hbond_atoms_from_df(df, hb_path)
 
-        if (mode == "relative_frequency"):
-            counter = normalize(counter, total)
-        """
-        if mode == "frequent_interactions":
-            discard_low_frequent(counter, total, general_results, lim=0.1)
-        """
+        if (mode == "count"):
+            counter = count(hbond_atoms)
+
+        elif (mode == "relative_frequency"):
+            counter = count_norm(hbond_atoms)
+
+        elif mode == "frequent_interactions":
+            counter = count_norm(hbond_atoms)
+            counter = discard_non_frequent(counter, lim=0.1)
+
         general_results[hb_path] = counter
-    """
-    if mode != "frequent_interactions":
-        join_results(general_results, mode)
-    """
+
     combined_results = combine_results(general_results, mode)
 
-    counter_barplot(combined_results)
+    generate_barplot(combined_results)
 
 
 if __name__ == "__main__":
