@@ -58,27 +58,55 @@ class SimIt(PELEIterator):
     def __init__(self, paths=None):
         super().__init__(paths)
         self._traj_it = TrajIt()
+        self._repo_it = RepoIt()
 
     @property
     def traj_it(self):
         return self._traj_it
 
+    @property
+    def repo_it(self):
+        return self._repo_it
+
     def build_traj_it(self, relative_output_path='output',
                       traj_name='trajectory', traj_ext='pdb'):
         paths_list = []
+        if (traj_ext != ''):
+            traj_ext = '.{}'.format(traj_ext)
         for p in self:
             tps = p.joinpath(relative_output_path).glob(
-                '[0-9]*/{}_*.{}'.format(traj_name, traj_ext))
+                '[0-9]*/{}_*{}'.format(traj_name, traj_ext))
             for tp in tps:
                 paths_list.append(str(tp))
 
         self._traj_it.set_paths(paths_list)
+
+    def build_repo_it(self, relative_output_path='output',
+                      report_name='report', report_ext=''):
+        paths_list = []
+        if (report_ext != ''):
+            report_ext = '.{}'.format(report_ext)
+        for p in self:
+            tps = p.joinpath(relative_output_path).glob(
+                '[0-9]*/{}_*{}'.format(report_name, report_ext))
+            for tp in tps:
+                paths_list.append(str(tp))
+
+        self._repo_it.set_paths(paths_list)
 
     def _checker(self, paths_list):
         return all([p.is_dir() for p in paths_list])
 
 
 class TrajIt(PELEIterator):
+    def __init__(self, paths=None):
+        super().__init__(paths)
+
+    def _checker(self, paths_list):
+        return all([p.is_file() for p in paths_list])
+
+
+class RepoIt(PELEIterator):
     def __init__(self, paths=None):
         super().__init__(paths)
 

@@ -24,9 +24,9 @@ __email__ = "marti.municoy@bsc.es, carles.perez@bsc.es"
 
 def parse_args():
     parser = ap.ArgumentParser()
-    parser.add_argument("traj_paths", metavar="PATH", type=str,
+    parser.add_argument("sim_paths", metavar="PATH", type=str,
                         nargs='*',
-                        help="Path to PELE trajectory files")
+                        help="Path to PELE simulation folders")
     parser.add_argument("-l", "--ligand_resname",
                         metavar="LIG", type=str, default='LIG',
                         help="Ligand residue name")
@@ -49,7 +49,7 @@ def parse_args():
 
     args = parser.parse_args()
 
-    return args.traj_paths, args.ligand_resname, args.distance, args.angle, \
+    return args.sim_paths, args.ligand_resname, args.distance, args.angle, \
         args.pseudo_hb, args.processors_number, args.topology_path
 
 
@@ -159,6 +159,8 @@ def main():
             file.write('Epoch    Trajectory    Model    Hbonds' + '\n')
             for (epoch, traj_num), hbonds in hbonds_dict.items():
                 for model, hbs in hbonds.items():
+                    if int(epoch) == 0 and int(model) == 0:
+                        continue
                     file.write('{:5d}    {:10d}    {:5d}    '.format(
                         epoch, traj_num, model))
 
