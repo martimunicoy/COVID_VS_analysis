@@ -182,12 +182,12 @@ def combine_results(general_results, mode):
 
 
 def generate_barplot(dictionary, mode, lim, output_path):
-    fig, ax = plt.subplots(1, figsize=(8, 6))
+    fig, ax = plt.subplots(1, figsize=(10, 8))
     fig.tight_layout()
-    fig.subplots_adjust(left=0.15, right=0.95, top=0.95, bottom=0.1)
+    fig.subplots_adjust(left=0.12, right=0.98, top=0.98, bottom=0.08)
 
     # y ticks and labels handlers
-    y = 0.5
+    y = 1.4
     ys = []
     sub_ys = []
     sub_xs = []
@@ -228,6 +228,8 @@ def generate_barplot(dictionary, mode, lim, output_path):
                 color_index = 0
             y += 0.5
 
+    plt.ylim((0, y))
+
     plt.ylabel('COVID-19 Mpro residues', fontweight='bold')
     plt.yticks(ys, ['{}:{}'.format(*i) for i in ylabels])
 
@@ -238,7 +240,7 @@ def generate_barplot(dictionary, mode, lim, output_path):
         plt.xlabel('Average of relative H bond frequencies', fontweight='bold')
 
     elif (mode == "frequent_interactions"):
-        plt.xlabel('Absolut H bonds counts with frequencies above ' +
+        plt.xlabel('Absolut H bond counts with frequencies above ' +
                    '{}'.format(lim), fontweight='bold')
 
     offset = max_freq * 0.025
@@ -254,7 +256,7 @@ def generate_barplot(dictionary, mode, lim, output_path):
         output_path = Path(output_path)
 
         if (output_path.parent.is_dir()):
-            plt.save(str(output_path), dpi=300, transparent=True,
+            plt.savefig(str(output_path), dpi=300, transparent=True,
                      pad_inches=0.05)
             return
 
