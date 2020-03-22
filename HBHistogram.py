@@ -5,6 +5,7 @@
 import argparse as ap
 import glob
 from collections import defaultdict
+from pathlib import Path
 
 # External imports
 import numpy as np
@@ -50,12 +51,15 @@ def parse_args():
     parser.add_argument("--models_to_ignore", nargs='*',
                         metavar="N", type=int, default=[],
                         help="PELE models whose H bonds will be ignored")
+    parser.add_argument("-o", "--output",
+                        metavar="PATH", type=str, default=None,
+                        help="Output path to save the plot")
 
     args = parser.parse_args()
 
     return args.hbonds_data_paths, args.mode, args.lim, \
         args.epochs_to_ignore, args.trajectories_to_ignore, \
-        args.models_to_ignore
+        args.models_to_ignore, args.output
 
 
 def create_df(hb_path):
@@ -177,8 +181,10 @@ def combine_results(general_results, mode):
     return combined_results
 
 
-def generate_barplot(dictionary, mode, lim):
-    fig, ax = plt.subplots(1)
+def generate_barplot(dictionary, mode, lim, output_path):
+    fig, ax = plt.subplots(1, figsize=(8, 6))
+    fig.tight_layout()
+    fig.subplots_adjust(left=0.15, right=0.95, top=0.95, bottom=0.1)
 
     # y ticks and labels handlers
     y = 0.5
@@ -244,12 +250,20 @@ def generate_barplot(dictionary, mode, lim):
 
     ax.set_facecolor('whitesmoke')
 
+    if (output_path is not None):
+        output_path = Path(output_path)
+
+        if (output_path.parent.is_dir()):
+            plt.save(str(output_path), dpi=300, transparent=True,
+                     pad_inches=0.05)
+            return
+
     plt.show()
 
 
 def main():
     hb_paths, mode, lim, epochs_to_ignore, trajectories_to_ignore, \
-        models_to_ignore = parse_args()
+        models_to_ignore, output_path = parse_args()
 
     hb_paths_list = []
     if (type(hb_paths) == list):
@@ -279,7 +293,7 @@ def main():
 
     combined_results = combine_results(general_results, mode)
 
-    generate_barplot(combined_results, mode, lim)
+    generate_barplot(combined_results, mode, lim, output_path)
 
 
 if __name__ == "__main__":
