@@ -66,17 +66,99 @@ def parse_args():
                         default='hbonds.out',
                         help="Path to H bonds file")
 
-    parser.add_argument("-g", "--golden_hbonds", nargs='*',
-                        metavar="C:R[:A]", type=str, default=[],
-                        help="Chain (C), residue (R) [and atom (A)] of golden "
-                        "H bonds that will be the main filtering condition")
+    parser.add_argument("-g1", "--golden_hbonds_1", nargs='*',
+                        metavar="C:R[:A1, A2]", type=str, default=[],
+                        help="Chain (C), residue (R) [and atoms (A1, A2)] of" +
+                        "subset 1 of golden H bonds. Subset 1 contains H " +
+                        "bond conditions that must always be fulfilled in " +
+                        "the filtering process")
+
+    parser.add_argument("-g2", "--golden_hbonds_2", nargs='*',
+                        metavar="C:R[:A1, A2]", type=str, default=[],
+                        help="Chain (C), residue (R) [and atoms (A1, A2)] of" +
+                        "subset 2 of golden H bonds. Subset 2 contains H " +
+                        "bond conditions that only a minimum number of them " +
+                        "must be fulfilled in the filtering process. The " +
+                        "minimum of required conditions from subset 2 is " +
+                        "defined with the minimum_g2_conditions argument")
+
+    parser.add_argument("--minimum_g2_conditions",
+                        metavar="N", type=int, default=2,
+                        help="Minimum number of subset 2 golden H bonds " +
+                        "that must be fulfilled in the filtering process")
 
     args = parser.parse_args()
 
     return args.traj_paths, args.ligand_resname, args.bandwidth, \
         args.processors_number, args.ie_col, args.rmsd_col, \
         args.topology_path, args.report_name, args.hbonds_path, \
-        args.golden_hbonds
+        args.golden_hbonds_1, args.golden_hbonds_2, args.minimum_g2_conditions
+
+
+def prepare_golden_dict(golden_hbonds):
+    golden_dict = {}
+    for hb in golden_hbonds:
+        hb_data = hb.split(':')
+        if (len(hb_data) == 2):
+            golden_dict[tuple(hb_data)] = ['all']
+        elif (len(hb_data) == 3):
+            golden_dict[tuple(hb_data[0:2])] = hb_data[2].split(',')
+        else:
+            print('Error: golden H bonds \'{}\' have a wrong format'.format(
+                golden_hbonds))
+
+    return golden_dict
+
+
+def get_reports_list(trajectories, report_name):
+    reports_list = []
+
+    for traj in trajectories:
+        # Recover corresponding report
+        num = int(''.join(filter(str.isdigit, traj.name)))
+        path = traj.parent
+
+        report_path = path.joinpath(report_name + '_{}'.format(num))
+
+        reports_list.append(report_path)
+
+    return reports_list
+
+
+def extract_hbonds(hbonds_path):
+    hbonds = defaultdict(list)
+
+    with open(str(hbonds_path), 'r') as file:
+        # Skip two header lines
+        file.readline()
+        file.readline()
+
+        # Extra hbonds and construct dict
+        for line in file:
+            line = line.strip()
+            fields = line.split()
+            epoch, trajectory, model = map(int, fields[:3])
+            _hbonds = []
+            try:
+                for hb in fields[3].split(','):
+                    _hbonds.append(hb)
+            except IndexError:
+                pass
+            hbonds[(epoch, trajectory, model)] = tuple(_hbonds)
+
+    return hbonds
+
+
+def filter_by_hbonds(hbonds, golden_hbonds_1, golden_hbonds_2,
+                     minimum_g2_conditions):
+    """
+    filtered_PELE_ids = []
+    for (e, t, m), _hbonds in hbonds.items():
+        for hb in _hbonds:
+            if (hb.split(':')[0:2] in golden_hbonds_1):
+    print()
+    """
+    pass
 
 
 def extract_epochs_and_traj_nums(trajectories):
@@ -136,24 +218,17 @@ def clusterize(lig_coords, bandwidth, proc_number):
     return gm.fit_predict(lig_coords)
 
 
-def extract_ligand_metrics(trajectories, report_name, cols, proc_number):
-    parallel_function = partial(p_extract_ligand_metrics,
-                                report_name, cols)
+def extract_ligand_metrics(reports, cols, proc_number):
+    parallel_function = partial(p_extract_ligand_metrics, cols)
 
     with Pool(proc_number) as pool:
         results = pool.map(parallel_function,
-                           trajectories)
+                           reports)
 
     return results
 
 
-def p_extract_ligand_metrics(report_name, cols, traj):
-    # Recover corresponding report
-    num = int(''.join(filter(str.isdigit, traj.name)))
-    path = traj.parent
-
-    report_path = path.joinpath(report_name + '_{}'.format(num))
-
+def p_extract_ligand_metrics(cols, report_path):
     results = []
 
     if (report_path.is_file()):
@@ -216,30 +291,6 @@ def calculate_mean_and_std_rmsds(rmsds_dict):
         std_rmsds_dict[cluster] = np.std(rmsds)
 
     return mean_rmsds_dict, std_rmsds_dict
-
-
-def extract_hbonds(hbonds_path):
-    hbonds = defaultdict(list)
-
-    with open(str(hbonds_path), 'r') as file:
-        # Skip two header lines
-        file.readline()
-        file.readline()
-
-        # Extra hbonds and construct dict
-        for line in file:
-            line = line.strip()
-            fields = line.split()
-            epoch, trajectory, model = map(int, fields[:3])
-            _hbonds = []
-            try:
-                for hb in fields[3].split(','):
-                    _hbonds.append(hb)
-            except IndexError:
-                pass
-            hbonds[(epoch, trajectory, model)] = tuple(_hbonds)
-
-    return hbonds
 
 
 def ignore_bonding_atom(hbonds):
@@ -313,7 +364,13 @@ def main():
     # Parse args
     PELE_sim_paths, lig_resname, bandwidth, proc_number, \
         ie_col, rmsd_col, topology_relative_path, report_name, \
-        hbonds_path, golden_hbonds = parse_args()
+        hbonds_path, golden_hbonds_1, golden_hbonds_2, \
+        minimum_g2_conditions = parse_args()
+
+    golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
+    golden_hbonds_2 = prepare_golden_dict(golden_hbonds_2)
+    print(golden_hbonds_1)
+    print(golden_hbonds_2)
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -336,6 +393,21 @@ def main():
         sim_it.build_traj_it('output', 'trajectory', 'xtc')
 
         trajectories = [traj for traj in sim_it.traj_it]
+
+        reports = get_reports_list(trajectories, report_name)
+
+        print(trajectories, reports)
+
+        hbonds = extract_hbonds(hbonds_path)
+
+        print(hbonds)
+
+        return
+
+
+
+
+        trajectories = [traj for traj in sim_it.traj_it]
         epochs, traj_nums = extract_epochs_and_traj_nums(trajectories)
 
         lig_coords, PELE_ids = extract_ligand_coords(epochs, traj_nums,
@@ -345,7 +417,7 @@ def main():
 
         results = clusterize(lig_coords, bandwidth, proc_number)
 
-        metrics = extract_ligand_metrics(trajectories, report_name,
+        metrics = extract_ligand_metrics(reports,
                                          (ie_col, rmsd_col),
                                          proc_number)
 
@@ -366,6 +438,10 @@ def main():
         # best_clusters = select_best_clusters()
 
         hbonds = extract_hbonds(hbonds_path)
+
+        filtered_PELE_ids = filter_by_hbonds(hbonds, golden_hbonds_1,
+                                             golden_hbonds_2,
+                                             minimum_g2_conditions)
 
         if (len(golden_hbonds) > 0 and (golden_hbonds[0]) == 2):
             hbonds = ignore_bonding_atom(hbonds)
