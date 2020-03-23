@@ -151,14 +151,26 @@ def extract_hbonds(hbonds_path):
 
 def filter_by_hbonds(hbonds, golden_hbonds_1, golden_hbonds_2,
                      minimum_g2_conditions):
-    """
     filtered_PELE_ids = []
-    for (e, t, m), _hbonds in hbonds.items():
-        for hb in _hbonds:
-            if (hb.split(':')[0:2] in golden_hbonds_1):
-    print()
-    """
-    pass
+    for PELE_id, _hbonds in hbonds.items():
+        g1_matchs = 0
+        g2_matchs = 0
+        for hb in set(_hbonds):
+            chain, residue, atom = hb.split(':')
+            if ((chain, residue) in golden_hbonds_1):
+                if ((atom in golden_hbonds_1[(chain, residue)]) or
+                        ('all' in golden_hbonds_1[(chain, residue)])):
+                    g1_matchs += 1
+            if ((chain, residue) in golden_hbonds_2):
+                if ((atom in golden_hbonds_2[(chain, residue)]) or
+                        ('all' in golden_hbonds_2[(chain, residue)])):
+                    g2_matchs += 1
+
+        if ((g1_matchs == len(golden_hbonds_1)) and
+                (g2_matchs >= minimum_g2_conditions)):
+            filtered_PELE_ids.append(PELE_id)
+
+    return filtered_PELE_ids
 
 
 def extract_epochs_and_traj_nums(trajectories):
@@ -396,11 +408,13 @@ def main():
 
         reports = get_reports_list(trajectories, report_name)
 
-        print(trajectories, reports)
-
         hbonds = extract_hbonds(hbonds_path)
 
-        print(hbonds)
+        filtered_PELE_ids = filter_by_hbonds(hbonds, golden_hbonds_1,
+                                             golden_hbonds_2,
+                                             minimum_g2_conditions)
+
+        #filtered_PELE_ids = filter_by_energies(reports, filtered_PELE_ids)
 
         return
 

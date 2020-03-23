@@ -1,1 +1,1 @@
-python ../FilteringAndClustering.py . -n 2 --ie_col 5 --rmsd_col 7 -t output/topologies/conntopology_0.pdb -b 0.2 -g1 B:GLU166:N -g2 B:GLN189:OE1,NE2 B:ASN142:OD1,ND2 B:HIS163 B:GLY143 --minimum_g2_conditions 2
+python ../FilteringAndClustering.py . -n 2 --ie_col 5 --rmsd_col 7 -t output/topologies/conntopology_0.pdb -b 0.2 -g1 A:GLU166:N -g2 A:GLN189:OE1,NE2 A:ASN142:OD1,ND2 A:HIS163 A:GLY143 --minimum_g2_conditions 2
