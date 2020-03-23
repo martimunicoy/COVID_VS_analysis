@@ -2,6 +2,7 @@
 
 
 # Standard imports
+import os
 import argparse as ap
 from multiprocessing import Pool
 from functools import partial
@@ -87,12 +88,16 @@ def parse_args():
                         help="Minimum number of subset 2 golden H bonds " +
                         "that must be fulfilled in the filtering process")
 
+    parser.add_argument("-o", "--output_path",
+                        metavar="PATH", type=str, default="filtering_results")
+
     args = parser.parse_args()
 
     return args.traj_paths, args.ligand_resname, args.bandwidth, \
         args.processors_number, args.ie_col, args.rmsd_col, \
         args.topology_path, args.report_name, args.hbonds_path, \
-        args.golden_hbonds_1, args.golden_hbonds_2, args.minimum_g2_conditions
+        args.golden_hbonds_1, args.golden_hbonds_2, \
+        args.minimum_g2_conditions, args.output_path
 
 
 def prepare_golden_dict(golden_hbonds):
@@ -201,12 +206,12 @@ def extract_ligand_metrics(reports, cols, proc_number):
     return results
 
 
-def get_ie_by_PELE_id(PELE_ids, ies):
-    ie_by_PELE_id = {}
-    for e, t, m, ie in zip(*PELE_ids, np.concatenate(ies)):
-        ie_by_PELE_id[(e, t, m)] = ie
+def get_metric_by_PELE_id(PELE_ids, metrics):
+    metric_by_PELE_id = {}
+    for e, t, m, metric in zip(*PELE_ids, np.concatenate(metrics)):
+        metric_by_PELE_id[(e, t, m)] = metric
 
-    return ie_by_PELE_id
+    return metric_by_PELE_id
 
 
 def filter_by_hbonds(hbonds, golden_hbonds_1, golden_hbonds_2,
@@ -250,6 +255,7 @@ def filter_by_energies(PELE_ids, ie_by_PELE_id):
     return filtered_PELE_ids
 
 
+"""
 def extract_epochs_and_traj_nums(trajectories):
     epochs = []
     traj_nums = []
@@ -259,24 +265,40 @@ def extract_epochs_and_traj_nums(trajectories):
         traj_nums.append(int(''.join(filter(str.isdigit, traj.name))))
 
     return epochs, traj_nums
+"""
 
 
-def extract_ligand_coords(epochs, traj_nums, trajectories, lig_resname,
+def extract_ligand_coords(filtered_PELE_ids, trajectories, lig_resname,
                           topology_path, proc_number):
+    PELE_ids_dict = defaultdict(list)
+    for (e, t, m) in filtered_PELE_ids:
+        PELE_ids_dict[(e, t)].append(m)
+
+    filtered_traj = []
+    for traj in trajectories:
+        e = int(traj.parent.name)
+        t = int(''.join(filter(str.isdigit, traj.name)))
+        if ((e, t) in PELE_ids_dict):
+            filtered_traj.append(traj)
+
     parallel_function = partial(p_extract_ligand_coords,
                                 lig_resname,
                                 topology_path)
 
     with Pool(proc_number) as pool:
         results = pool.map(parallel_function,
-                           trajectories)
+                           filtered_traj)
 
-    PELE_ids = []
-    for e, t, r in zip(epochs, traj_nums, results):
-        for i in range(0, len(r)):
-            PELE_ids.append((e, t, i))
+    filtered_results = []
+    filtered_PELE_ids = []
+    for i, traj in enumerate(filtered_traj):
+        e = int(traj.parent.name)
+        t = int(''.join(filter(str.isdigit, traj.name)))
+        for m in PELE_ids_dict[(e, t)]:
+            filtered_results.append(results[i][m])
+            filtered_PELE_ids.append((e, t, m))
 
-    return np.concatenate(results), PELE_ids
+    return filtered_results, filtered_PELE_ids
 
 
 def p_extract_ligand_coords(lig_resname, topology_path, traj_path):
@@ -307,9 +329,6 @@ def clusterize(lig_coords, bandwidth, proc_number):
     return gm.fit_predict(lig_coords)
 
 
-
-
-
 def calculate_probabilities(cluster_results):
     p_dict = defaultdict(int)
     total = 0
@@ -323,98 +342,29 @@ def calculate_probabilities(cluster_results):
     return p_dict
 
 
-def filter_structures_by_cluster(cluster_results, coordinates):
-    struct_dict = defaultdict(list)
-    for cluster, coords in zip(cluster_results, coordinates):
-        coords = np.reshape(coords, (-1, 3))
-        struct_dict[cluster].append(coords)
-
-    return struct_dict
+def get_most_populated_cluster(p_dict):
+    return sorted(p_dict.items(), key=itemgetter(1), reverse=True)[0]
 
 
-def calculate_rmsds(results, rmsds):
-    rmsds_dict = defaultdict(list)
-    for cluster, rmsd in zip(results, rmsds):
-        rmsds_dict[cluster].append(rmsd)
+def get_metrics_from_cluster(cluster_id, results, PELE_ids,
+                             ie_by_PELE_id, rmsd_by_PELE_id,
+                             te_by_PELE_id):
+    ies = []
+    rmsds = []
+    tes = []
+    min_te = 0
+    min_te_id = None
+    for r, PELE_id in zip(results, PELE_ids):
+        if (r == cluster_id):
+            ies.append(ie_by_PELE_id[PELE_id])
+            rmsds.append(rmsd_by_PELE_id[PELE_id])
+            tes.append(te_by_PELE_id[PELE_id])
 
-    return rmsds_dict
+            if (te_by_PELE_id[PELE_id] < min_te):
+                min_te = te_by_PELE_id[PELE_id]
+                min_te_id = PELE_id
 
-
-def calculate_mean_and_std_rmsds(rmsds_dict):
-    mean_rmsds_dict = {}
-    std_rmsds_dict = {}
-    for cluster, rmsds in rmsds_dict.items():
-        mean_rmsds_dict[cluster] = np.mean(rmsds)
-        std_rmsds_dict[cluster] = np.std(rmsds)
-
-    return mean_rmsds_dict, std_rmsds_dict
-
-
-def ignore_bonding_atom(hbonds):
-    for PELE_id, _hbonds in hbonds.items():
-        new_hbonds = []
-        for hb in _hbonds:
-            new_hbonds.append(':'.join([i for i in hb.split(':')[:2]]))
-        hbonds[PELE_id] = tuple(new_hbonds)
-
-    return hbonds
-
-
-def calculate_hbonds_freq(results, PELE_ids, hbonds):
-    # Get hbonds by cluster
-    hbonds_by_cluster = defaultdict(list)
-    for cluster, PELE_id in zip(results, PELE_ids):
-        for hb in hbonds[PELE_id]:
-            hbonds_by_cluster[cluster].append(hb)
-
-    # Calculate frequencies
-    hbond_freqs = defaultdict(dict)
-    for cluster, _hbonds in hbonds_by_cluster.items():
-        counter = {}
-        for hb in set(_hbonds):
-            counter[hb] = _hbonds.count(hb)
-
-        norm_factor = 1 / len(_hbonds)
-
-        for hb, num in counter.items():
-            hbond_freqs[cluster][hb] = num * norm_factor
-
-    return hbond_freqs
-
-
-def get_best_binding_mode(hbond_freqs, golden_hbonds, p_dict):
-    score_by_cluster = {}
-    for cluster, _hbond_freqs in hbond_freqs.items():
-        # Skip low-populated clusters
-        if (p_dict[cluster] < 0.01):
-            continue
-        score_by_cluster[cluster] = 0
-        for hbond, freq in _hbond_freqs.items():
-            if (hbond in golden_hbonds):
-                score_by_cluster[cluster] += freq
-
-    print(score_by_cluster)
-
-    return sorted(score_by_cluster.items(), key=itemgetter(1), reverse=True)[0]
-
-"""
-def select_best_clusters(results, ):
-    best_clusters = [i for i, j in sorted(mean_ie_dict.items(), key=lambda item: item[1])]
-    best_results = []
-    new_ids = {}
-    for bc in best_clusters:
-        if (p_dict[bc] / total < lowest_density):
-            continue
-        if (len(new_ids) > number_of_best_clusters - 1):
-            break
-        new_ids[bc] = len(new_ids)
-
-    for r in results:
-        if (r in new_ids.keys()):
-            best_results.append(new_ids[r])
-        else:
-            best_results.append(-1)
-"""
+    return np.mean(ies), np.mean(rmsds), np.mean(tes), min_te_id
 
 
 def main():
@@ -422,7 +372,7 @@ def main():
     PELE_sim_paths, lig_resname, bandwidth, proc_number, \
         ie_col, rmsd_col, topology_relative_path, report_name, \
         hbonds_path, golden_hbonds_1, golden_hbonds_2, \
-        minimum_g2_conditions = parse_args()
+        minimum_g2_conditions, output_path = parse_args()
 
     golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
     golden_hbonds_2 = prepare_golden_dict(golden_hbonds_2)
@@ -457,21 +407,27 @@ def main():
 
         hbonds = extract_hbonds(hbonds_path)
 
-        metrics = extract_ligand_metrics(reports, (ie_col, rmsd_col),
+        metrics = extract_ligand_metrics(reports, (ie_col, rmsd_col, 4),
                                          proc_number)
 
         ies = []
         rmsds = []
+        tes = []
         for chunk in metrics:
             _ies = []
             _rmsds = []
-            for ie, rmsd in chunk:
+            _tes = []
+            for ie, rmsd, te in chunk:
                 _ies.append(float(ie))
                 _rmsds.append(float(rmsd))
+                _tes.append(float(te))
             ies.append(_ies)
             rmsds.append(_rmsds)
+            tes.append(_tes)
 
-        ie_by_PELE_id = get_ie_by_PELE_id(PELE_ids, ies)
+        ie_by_PELE_id = get_metric_by_PELE_id(PELE_ids, ies)
+        rmsd_by_PELE_id = get_metric_by_PELE_id(PELE_ids, rmsds)
+        te_by_PELE_id = get_metric_by_PELE_id(PELE_ids, tes)
 
         filtered_PELE_ids = filter_by_hbonds(hbonds, golden_hbonds_1,
                                              golden_hbonds_2,
@@ -480,66 +436,44 @@ def main():
         filtered_PELE_ids = filter_by_energies(filtered_PELE_ids,
                                                ie_by_PELE_id)
 
-        return
-
-
-
-
-        trajectories = [traj for traj in sim_it.traj_it]
-        epochs, traj_nums = extract_epochs_and_traj_nums(trajectories)
-
-        lig_coords, PELE_ids = extract_ligand_coords(epochs, traj_nums,
-                                                     trajectories, lig_resname,
-                                                     topology_path,
-                                                     proc_number)
+        lig_coords, filtered_PELE_ids = extract_ligand_coords(
+            filtered_PELE_ids, trajectories, lig_resname, topology_path,
+            proc_number)
 
         results = clusterize(lig_coords, bandwidth, proc_number)
 
-        metrics = extract_ligand_metrics(reports,
-                                         (ie_col, rmsd_col),
-                                         proc_number)
-
         p_dict = calculate_probabilities(results)
-        #print(p_dict)
-        struct_dict = filter_structures_by_cluster(results, lig_coords)
-        rmsds_dict = calculate_rmsds(results, rmsds)
-        #print(rmsds_dict)
-        mean_rmsds_dict, std_rmsds_dict = \
-            calculate_mean_and_std_rmsds(rmsds_dict)
-        # best_clusters = select_best_clusters()
 
-        hbonds = extract_hbonds(hbonds_path)
+        cluster_id, frequency = get_most_populated_cluster(p_dict)
 
-        filtered_PELE_ids = filter_by_hbonds(hbonds, golden_hbonds_1,
-                                             golden_hbonds_2,
-                                             minimum_g2_conditions)
+        mean_ie, mean_rmsd, mean_te, representative_PELE_id = \
+            get_metrics_from_cluster(cluster_id, results, filtered_PELE_ids,
+                                     ie_by_PELE_id, rmsd_by_PELE_id,
+                                     te_by_PELE_id)
 
-        if (len(golden_hbonds) > 0 and (golden_hbonds[0]) == 2):
-            hbonds = ignore_bonding_atom(hbonds)
+        output_path = PELE_sim_path.joinpath(output_path)
 
-        hbond_freqs = calculate_hbonds_freq(results, PELE_ids, hbonds)
+        if (not output_path.is_dir()):
+            os.mkdir(str(output_path))
 
-        try:
-            best_binding_mode = get_best_binding_mode(hbond_freqs,
-                                                      golden_hbonds,
-                                                      p_dict)
-        except IndexError:
-            best_binding_mode = None
+        with open(str(output_path.joinpath('metrics.out')), 'w') as f:
+            f.write('{}    {}    {}                                {}'.format(
+                'Mean Total Energy', 'Mean Interaction Energy',
+                'Mean RMSD (respect to initial structure)',
+                'PELE ID'))
+            f.write('\n')
+            f.write('{: 17.1f}    {: 23.1f}    {: 40.1f}    '.format(
+                mean_te, mean_ie, mean_rmsd, *representative_PELE_id))
+            f.write('Epoch:{:3d} Trajectory:{:3d} Model:{:4d}\n'.format(
+                *representative_PELE_id))
 
-        print(best_binding_mode)
+        rep_traj = md.load(str(PELE_sim_path.joinpath(
+            'output/{}/trajectory_{}.xtc'.format(
+                *representative_PELE_id[:2]))),
+            top=str(topology_path))
 
-        # Extract representative structure of the best binding mode and check
-        # H bonds! B:GLY302:O
-
-
-
-
-        #print(p_dict, struct_dict, rmsds_dict, mean_rmsds_dict, std_rmsds_dict)
-
-
-
-
-
+        rep_model = rep_traj[representative_PELE_id[2]]
+        rep_model.save_pdb(str(output_path.joinpath('rep_structure.pdb')))
 
 
 if __name__ == "__main__":
