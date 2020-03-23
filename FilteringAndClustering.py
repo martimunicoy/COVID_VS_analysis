@@ -130,6 +130,20 @@ def get_reports_list(trajectories, report_name):
     return reports_list
 
 
+def extract_ligand_properties(topology_path, resname):
+    n_heavy_atoms = 0
+    molecular_weight = 0
+
+    traj = md.load_pdb(str(topology_path))
+    lig = traj.topology.select('resname {}'.format(resname))
+    for atom in traj.atom_slice(lig).top.atoms:
+        if (atom.element != 'hydrogen'):
+            n_heavy_atoms += 1
+        molecular_weight += atom.element.mass
+
+    return n_heavy_atoms, molecular_weight
+
+
 def extract_PELE_ids(reports):
     epochs = []
     trajectories = []
@@ -363,13 +377,15 @@ def main():
 
     golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
     golden_hbonds_2 = prepare_golden_dict(golden_hbonds_2)
+
     print(' - Golden H bonds set 1:')
     for res, atoms in golden_hbonds_1.items():
         print('   - {}:{}:'.format(*res), end='')
         for at in atoms[:-1]:
             print(at, end=',')
         print(atoms[-1])
-    print(' - Golden H bonds set 2:')
+    print(' - Golden H bonds set 2 ({} '.format(minimum_g2_conditions) +
+          'of them need to be fulfilled:')
     for res, atoms in golden_hbonds_2.items():
         print('   - {}:{}:'.format(*res), end='')
         for at in atoms[:-1]:
@@ -401,6 +417,12 @@ def main():
         print(' - Detected {} trajectories'.format(len(trajectories)))
 
         reports = get_reports_list(trajectories, report_name)
+
+        print(' - Reading ligand properties')
+        ligand_heavy_atoms, ligand_mass = extract_ligand_properties(
+            topology_path, lig_resname)
+        print('   - Detected {} heavy atoms'.format(ligand_heavy_atoms))
+        print('   - Molecular weight: {}'.format(ligand_mass))
 
         PELE_ids = extract_PELE_ids(reports)
 
@@ -437,6 +459,11 @@ def main():
         print(' - H bond filtering: {} '.format(len(filtered_PELE_ids)) +
               'structures were selected out of ' +
               '{}'.format(len(PELE_ids[0])))
+
+        if (len(filtered_PELE_ids) == 0):
+            print(' - Skipping simulation because no model fulfills the ' +
+                  'required conditions')
+            continue
 
         old_structures = len(filtered_PELE_ids)
         filtered_PELE_ids = filter_by_energies(filtered_PELE_ids,
@@ -484,12 +511,16 @@ def main():
               'model: {}'.format(representative_PELE_id[2]))
 
         with open(str(output_path.joinpath('metrics.out')), 'w') as f:
-            f.write('{}    {}    {}                                {}'.format(
-                'Mean Total Energy', 'Mean Interaction Energy',
-                'Mean RMSD (respect to initial structure)',
+            f.write('{}    {}    {}    {}    {}'.format(
+                'Heavy atoms', 'Molecular weight', 'Mean Total Energy',
+                'Mean Interaction Energy',
+                'Mean RMSD (respect to initial struc.)',) +
+                '                                {}'.format(
                 'PELE ID'))
             f.write('\n')
-            f.write('{: 17.1f}    {: 23.1f}    {: 40.1f}    '.format(
+            f.write('{:11d}    {:16.3f}    '.format(ligand_heavy_atoms,
+                                                ligand_mass))
+            f.write('{: 17.1f}    {: 23.1f}    {: 37.1f}    '.format(
                 mean_te, mean_ie, mean_rmsd, *representative_PELE_id))
             f.write('Epoch:{:3d} Trajectory:{:3d} Model:{:4d}\n'.format(
                 *representative_PELE_id))
