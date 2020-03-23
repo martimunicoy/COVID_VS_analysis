@@ -353,19 +353,19 @@ def get_metrics_from_cluster(cluster_id, results, PELE_ids,
     ies = []
     rmsds = []
     tes = []
-    min_te = 0
-    min_te_id = None
+    min_ie = 0
+    min_ie_id = None
     for r, PELE_id in zip(results, PELE_ids):
         if (r == cluster_id):
             ies.append(ie_by_PELE_id[PELE_id])
             rmsds.append(rmsd_by_PELE_id[PELE_id])
             tes.append(te_by_PELE_id[PELE_id])
 
-            if (te_by_PELE_id[PELE_id] < min_te):
-                min_te = te_by_PELE_id[PELE_id]
-                min_te_id = PELE_id
+            if (ie_by_PELE_id[PELE_id] < min_ie):
+                min_ie = ie_by_PELE_id[PELE_id]
+                min_ie_id = PELE_id
 
-    return np.mean(ies), np.mean(rmsds), np.mean(tes), min_te_id
+    return np.mean(ies), np.mean(rmsds), np.mean(tes), min_ie_id
 
 
 def main():
@@ -500,7 +500,7 @@ def main():
             os.mkdir(str(output_path))
 
         print(' - Results')
-        print('   - Selected cluster:        {:25.1f}'.format(cluster_id))
+        print('   - Selected cluster:        {:25d}'.format(cluster_id))
         print('   - Mean total energy:       {:25.1f}'.format(mean_te))
         print('   - Mean interaction energy: {:25.1f}'.format(mean_ie))
         print('   - Mean RMSD (respect to initial structure): ' +
@@ -519,7 +519,7 @@ def main():
                 'PELE ID'))
             f.write('\n')
             f.write('{:11d}    {:16.3f}    '.format(ligand_heavy_atoms,
-                                                ligand_mass))
+                                                    ligand_mass))
             f.write('{: 17.1f}    {: 23.1f}    {: 37.1f}    '.format(
                 mean_te, mean_ie, mean_rmsd, *representative_PELE_id))
             f.write('Epoch:{:3d} Trajectory:{:3d} Model:{:4d}\n'.format(
