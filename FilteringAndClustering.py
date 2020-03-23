@@ -373,7 +373,7 @@ def main():
     PELE_sim_paths, lig_resname, bandwidth, proc_number, \
         ie_col, rmsd_col, topology_relative_path, report_name, \
         hbonds_relative_path, golden_hbonds_1, golden_hbonds_2, \
-        minimum_g2_conditions, output_path = parse_args()
+        minimum_g2_conditions, output_relative_path = parse_args()
 
     golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
     golden_hbonds_2 = prepare_golden_dict(golden_hbonds_2)
@@ -494,7 +494,7 @@ def main():
                                      ie_by_PELE_id, rmsd_by_PELE_id,
                                      te_by_PELE_id)
 
-        output_path = PELE_sim_path.joinpath(output_path)
+        output_path = PELE_sim_path.joinpath(output_relative_path)
 
         if (not output_path.is_dir()):
             os.mkdir(str(output_path))
