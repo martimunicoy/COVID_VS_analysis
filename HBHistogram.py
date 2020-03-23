@@ -108,13 +108,14 @@ def count(hbond_atoms):
     return counter
 
 
-def count_norm(hbond_atoms):
+def count_norm(hbond_atoms, df):
     counter = defaultdict(dict)
 
     if (len(hbond_atoms) == 0):
         return counter
 
-    norm_factor = 1 / len(hbond_atoms)
+    number_of_snapshots = len(df)
+    norm_factor = 1 / number_of_snapshots
 
     for (chain, residue, atom) in hbond_atoms:
         counter[(chain, residue)][atom] = \
@@ -285,10 +286,10 @@ def main():
             counter = count(hbond_atoms)
 
         elif (mode == "relative_frequency"):
-            counter = count_norm(hbond_atoms)
+            counter = count_norm(hbond_atoms, df)
 
         elif mode == "frequent_interactions":
-            counter = count_norm(hbond_atoms)
+            counter = count_norm(hbond_atoms, df)
             counter = discard_non_frequent(counter, lim)
 
         general_results[hb_path] = counter
