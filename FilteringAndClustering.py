@@ -473,6 +473,11 @@ def main():
               'structures were selected out of ' +
               '{}'.format(old_structures))
 
+        if (len(filtered_PELE_ids) == 0):
+            print(' - Skipping simulation because no model fulfills the ' +
+                  'required conditions')
+            continue
+
         lig_coords, filtered_PELE_ids = extract_ligand_coords(
             filtered_PELE_ids, trajectories, lig_resname, topology_path,
             proc_number)
