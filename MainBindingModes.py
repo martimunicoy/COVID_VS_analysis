@@ -24,6 +24,8 @@ __version__ = "1.0.1"
 __maintainer__ = "Marti Municoy, Carles Perez"
 __email__ = "marti.municoy@bsc.es, carles.perez@bsc.es"
 
+# Variable
+OUT_PATTERN = "output/{}/trajectory_{}.xtc"
 
 def parse_args():
     parser = ap.ArgumentParser()
@@ -191,11 +193,11 @@ def calculate_probabilities(cluster_results):
     return p_dict
 
 
-def filter_structures_by_cluster(cluster_results, coordinates):
+def filter_structures_by_cluster(cluster_results, coordinates, ids):
     struct_dict = defaultdict(list)
-    for cluster, coords in zip(cluster_results, coordinates):
+    for cluster, coords, id in zip(cluster_results, coordinates, ids):
         coords = np.reshape(coords, (-1, 3))
-        struct_dict[cluster].append(coords)
+        struct_dict[cluster].append((coords, id))
 
     return struct_dict
 
@@ -289,6 +291,13 @@ def get_best_binding_mode(hbond_freqs, golden_hbonds, p_dict):
 
     return sorted(score_by_cluster.items(), key=itemgetter(1), reverse=True)[0]
 
+
+def write_pdb_from_coords(trajectory, new_coords, outfile="test.pdb", ligname="LIG"):
+    lig_top = trajectory.topology.select("resname {}".format(ligname))
+    lig = trajectory[0].xyz
+    ligand_snap.save_pdb(outfile)
+
+
 """
 def select_best_clusters(results, ):
     best_clusters = [i for i, j in sorted(mean_ie_dict.items(), key=lambda item: item[1])]
@@ -358,7 +367,8 @@ def main():
 
         p_dict = calculate_probabilities(results)
         #print(p_dict)
-        struct_dict = filter_structures_by_cluster(results, lig_coords)
+        struct_dict = filter_structures_by_cluster(results, lig_coords, 
+                                                   PELE_ids)
         rmsds_dict = calculate_rmsds(results, rmsds)
         #print(rmsds_dict)
         mean_rmsds_dict, std_rmsds_dict = \
@@ -378,8 +388,16 @@ def main():
                                                       p_dict)
         except IndexError:
             best_binding_mode = None
-
-        print(best_binding_mode)
+        epoch, trajnum, snap = struct_dict[best_binding_mode[0]][0][1] 
+        # Obtain the ID
+        trajectory = OUT_PATTERN.format(epoch, trajnum, snap)
+        # Get the name of the trajectory path
+        try:
+            traj = md.load(str(trajectory), top=topology_relative_path)
+        except FileNotFoundError:
+            raise("The trajectory file {} does not exist".format(trajectory))
+        # Load the trajectory in mdtraj and finally export a PDB file
+        traj[snap].save_pdb("best_structure.pdb") 
 
         # Extract representative structure of the best binding mode and check
         # H bonds! B:GLY302:O
