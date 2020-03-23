@@ -372,7 +372,7 @@ def main():
     # Parse args
     PELE_sim_paths, lig_resname, bandwidth, proc_number, \
         ie_col, rmsd_col, topology_relative_path, report_name, \
-        hbonds_path, golden_hbonds_1, golden_hbonds_2, \
+        hbonds_relative_path, golden_hbonds_1, golden_hbonds_2, \
         minimum_g2_conditions, output_path = parse_args()
 
     golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
@@ -396,7 +396,7 @@ def main():
 
     for PELE_sim_path in all_sim_it:
         print(' - Extracting ligand coords from {}'.format(PELE_sim_path))
-        hbonds_path = PELE_sim_path.joinpath(hbonds_path)
+        hbonds_path = PELE_sim_path.joinpath(hbonds_relative_path)
         topology_path = PELE_sim_path.joinpath(topology_relative_path)
 
         if (not topology_path.is_file()):
