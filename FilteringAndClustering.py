@@ -244,6 +244,7 @@ def filter_by_energies(PELE_ids, ie_by_PELE_id):
         ies.append(ie_by_PELE_id[PELE_id])
 
     upper_bound = np.percentile(ies, 25)
+    print('   - Energetic upper bound: {:.1f} kcal/mol'.format(upper_bound))
 
     filtered_PELE_ids = []
     for PELE_id in PELE_ids:
@@ -253,19 +254,6 @@ def filter_by_energies(PELE_ids, ie_by_PELE_id):
             filtered_PELE_ids.append(PELE_id)
 
     return filtered_PELE_ids
-
-
-"""
-def extract_epochs_and_traj_nums(trajectories):
-    epochs = []
-    traj_nums = []
-
-    for traj in trajectories:
-        epochs.append(int(traj.parent.name))
-        traj_nums.append(int(''.join(filter(str.isdigit, traj.name))))
-
-    return epochs, traj_nums
-"""
 
 
 def extract_ligand_coords(filtered_PELE_ids, trajectories, lig_resname,
@@ -321,7 +309,6 @@ def p_extract_ligand_coords(lig_resname, topology_path, traj_path):
 
 
 def clusterize(lig_coords, bandwidth, proc_number):
-    print(' - Clustering')
     gm = MeanShift(bandwidth=bandwidth,
                    n_jobs=proc_number,
                    cluster_all=True)
@@ -376,8 +363,18 @@ def main():
 
     golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
     golden_hbonds_2 = prepare_golden_dict(golden_hbonds_2)
-    print(golden_hbonds_1)
-    print(golden_hbonds_2)
+    print(' - Golden H bonds set 1:')
+    for res, atoms in golden_hbonds_1.items():
+        print('   - {}:{}:'.format(*res), end='')
+        for at in atoms[:-1]:
+            print(at, end=',')
+        print(atoms[-1])
+    print(' - Golden H bonds set 2:')
+    for res, atoms in golden_hbonds_2.items():
+        print('   - {}:{}:'.format(*res), end='')
+        for at in atoms[:-1]:
+            print(at, end=',')
+        print(atoms[-1])
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -401,11 +398,15 @@ def main():
 
         trajectories = [traj for traj in sim_it.traj_it]
 
+        print(' - Detected {} trajectories'.format(len(trajectories)))
+
         reports = get_reports_list(trajectories, report_name)
 
         PELE_ids = extract_PELE_ids(reports)
 
         hbonds = extract_hbonds(hbonds_path)
+
+        print(' - Detected {} sets of H bonds'.format(len(hbonds)))
 
         metrics = extract_ligand_metrics(reports, (ie_col, rmsd_col, 4),
                                          proc_number)
@@ -433,16 +434,31 @@ def main():
                                              golden_hbonds_2,
                                              minimum_g2_conditions)
 
+        print(' - H bond filtering: {} '.format(len(filtered_PELE_ids)) +
+              'structures were selected out of ' +
+              '{}'.format(len(PELE_ids[0])))
+
+        old_structures = len(filtered_PELE_ids)
         filtered_PELE_ids = filter_by_energies(filtered_PELE_ids,
                                                ie_by_PELE_id)
+
+        print(' - Energetic filtering: {} '.format(len(filtered_PELE_ids)) +
+              'structures were selected out of ' +
+              '{}'.format(old_structures))
 
         lig_coords, filtered_PELE_ids = extract_ligand_coords(
             filtered_PELE_ids, trajectories, lig_resname, topology_path,
             proc_number)
 
+        print(' - Clustering filtered ligand coordinates')
         results = clusterize(lig_coords, bandwidth, proc_number)
 
         p_dict = calculate_probabilities(results)
+
+        print(' - Clustering resulted in {} clusters '.format(len(p_dict)) +
+              'with frequencies:')
+        for c, f in sorted(p_dict.items(), key=itemgetter(0)):
+            print('   - {:3d}: {:3.2f}'.format(c, f))
 
         cluster_id, frequency = get_most_populated_cluster(p_dict)
 
@@ -455,6 +471,17 @@ def main():
 
         if (not output_path.is_dir()):
             os.mkdir(str(output_path))
+
+        print(' - Results')
+        print('   - Selected cluster:        {:25.1f}'.format(cluster_id))
+        print('   - Mean total energy:       {:25.1f}'.format(mean_te))
+        print('   - Mean interaction energy: {:25.1f}'.format(mean_ie))
+        print('   - Mean RMSD (respect to initial structure): ' +
+              '{:8.1f}'.format(mean_rmsd))
+        print('   - Representative structure: ' +
+              'epoch: {}, '.format(representative_PELE_id[0]) +
+              'trajectory: {}, '.format(representative_PELE_id[1]) +
+              'model: {}'.format(representative_PELE_id[2]))
 
         with open(str(output_path.joinpath('metrics.out')), 'w') as f:
             f.write('{}    {}    {}                                {}'.format(
