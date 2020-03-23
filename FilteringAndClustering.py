@@ -125,6 +125,23 @@ def get_reports_list(trajectories, report_name):
     return reports_list
 
 
+def extract_PELE_ids(reports):
+    epochs = []
+    trajectories = []
+    models = []
+
+    for repo in reports:
+        with open(str(repo), 'r') as f:
+            f.readline()
+            for i, line in enumerate(f):
+                epochs.append(int(repo.parent.name))
+                trajectories.append(
+                    int(''.join(filter(str.isdigit, repo.name))))
+                models.append(i)
+
+    return epochs, trajectories, models
+
+
 def extract_hbonds(hbonds_path):
     hbonds = defaultdict(list)
 
@@ -149,6 +166,49 @@ def extract_hbonds(hbonds_path):
     return hbonds
 
 
+def p_extract_ligand_metrics(cols, report_path):
+    results = []
+
+    if (report_path.is_file()):
+        try:
+            with open(str(report_path), 'r') as f:
+                f.readline()
+                for line in f:
+                    line.strip()
+                    fields = line.split()
+                    metrics = []
+                    for col in cols:
+                        metrics.append(fields[col - 1])
+                    results.append(metrics)
+
+        except IndexError:
+            print(' - p_extract_ligand_metric Warning: wrong index ' +
+                  'supplied for trajectory: \'{}\''.format(report_path))
+    else:
+        print(' - p_extract_ligand_metric Warning: wrong path to report ' +
+              'for trajectory: \'{}\''.format(report_path))
+
+    return results
+
+
+def extract_ligand_metrics(reports, cols, proc_number):
+    parallel_function = partial(p_extract_ligand_metrics, cols)
+
+    with Pool(proc_number) as pool:
+        results = pool.map(parallel_function,
+                           reports)
+
+    return results
+
+
+def get_ie_by_PELE_id(PELE_ids, ies):
+    ie_by_PELE_id = {}
+    for e, t, m, ie in zip(*PELE_ids, np.concatenate(ies)):
+        ie_by_PELE_id[(e, t, m)] = ie
+
+    return ie_by_PELE_id
+
+
 def filter_by_hbonds(hbonds, golden_hbonds_1, golden_hbonds_2,
                      minimum_g2_conditions):
     filtered_PELE_ids = []
@@ -168,6 +228,23 @@ def filter_by_hbonds(hbonds, golden_hbonds_1, golden_hbonds_2,
 
         if ((g1_matchs == len(golden_hbonds_1)) and
                 (g2_matchs >= minimum_g2_conditions)):
+            filtered_PELE_ids.append(PELE_id)
+
+    return filtered_PELE_ids
+
+
+def filter_by_energies(PELE_ids, ie_by_PELE_id):
+    ies = []
+    for PELE_id in PELE_ids:
+        ies.append(ie_by_PELE_id[PELE_id])
+
+    upper_bound = np.percentile(ies, 25)
+
+    filtered_PELE_ids = []
+    for PELE_id in PELE_ids:
+        ie = ie_by_PELE_id[PELE_id]
+
+        if (ie < upper_bound):
             filtered_PELE_ids.append(PELE_id)
 
     return filtered_PELE_ids
@@ -230,39 +307,7 @@ def clusterize(lig_coords, bandwidth, proc_number):
     return gm.fit_predict(lig_coords)
 
 
-def extract_ligand_metrics(reports, cols, proc_number):
-    parallel_function = partial(p_extract_ligand_metrics, cols)
 
-    with Pool(proc_number) as pool:
-        results = pool.map(parallel_function,
-                           reports)
-
-    return results
-
-
-def p_extract_ligand_metrics(cols, report_path):
-    results = []
-
-    if (report_path.is_file()):
-        try:
-            with open(str(report_path), 'r') as f:
-                f.readline()
-                for line in f:
-                    line.strip()
-                    fields = line.split()
-                    metrics = []
-                    for col in cols:
-                        metrics.append(fields[col - 1])
-                    results.append(metrics)
-
-        except IndexError:
-            print(' - p_extract_ligand_metric Warning: wrong index ' +
-                  'supplied for trajectory: \'{}\''.format(traj))
-    else:
-        print(' - p_extract_ligand_metric Warning: wrong path to report ' +
-              'for trajectory: \'{}\''.format(traj))
-
-    return results
 
 
 def calculate_probabilities(cluster_results):
@@ -408,13 +453,32 @@ def main():
 
         reports = get_reports_list(trajectories, report_name)
 
+        PELE_ids = extract_PELE_ids(reports)
+
         hbonds = extract_hbonds(hbonds_path)
+
+        metrics = extract_ligand_metrics(reports, (ie_col, rmsd_col),
+                                         proc_number)
+
+        ies = []
+        rmsds = []
+        for chunk in metrics:
+            _ies = []
+            _rmsds = []
+            for ie, rmsd in chunk:
+                _ies.append(float(ie))
+                _rmsds.append(float(rmsd))
+            ies.append(_ies)
+            rmsds.append(_rmsds)
+
+        ie_by_PELE_id = get_ie_by_PELE_id(PELE_ids, ies)
 
         filtered_PELE_ids = filter_by_hbonds(hbonds, golden_hbonds_1,
                                              golden_hbonds_2,
                                              minimum_g2_conditions)
 
-        #filtered_PELE_ids = filter_by_energies(reports, filtered_PELE_ids)
+        filtered_PELE_ids = filter_by_energies(filtered_PELE_ids,
+                                               ie_by_PELE_id)
 
         return
 
@@ -434,13 +498,6 @@ def main():
         metrics = extract_ligand_metrics(reports,
                                          (ie_col, rmsd_col),
                                          proc_number)
-
-        ies = []
-        rmsds = []
-        for chunk in metrics:
-            for ie, rmsd in chunk:
-                ies.append(float(ie))
-                rmsds.append(float(rmsd))
 
         p_dict = calculate_probabilities(results)
         #print(p_dict)
