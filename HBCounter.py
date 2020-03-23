@@ -46,11 +46,16 @@ def parse_args():
                         metavar="PATH", type=str,
                         default='output/topologies/topology_0.pdb',
                         help="Relative path to topology")
+    parser.add_argument("-o", "--output_path",
+                        metavar="PATH", type=str,
+                        default='hbonds.out',
+                        help="Relative path to output file")
 
     args = parser.parse_args()
 
     return args.sim_paths, args.ligand_resname, args.distance, args.angle, \
-        args.pseudo_hb, args.processors_number, args.topology_path
+        args.pseudo_hb, args.processors_number, args.topology_path, \
+        args.output_path
 
 
 def find_hbonds_in_trajectory(lig_resname, distance, angle, pseudo,
@@ -103,7 +108,7 @@ def find_hbond_in_snapshot(traj, model_id, lig, distance, angle, pseudo,
 def main():
     # Parse args
     PELE_sim_paths, lig_resname, distance, angle, pseudo_hb, proc_number, \
-        topology_relative_path = parse_args()
+        topology_relative_path, output_path = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -154,7 +159,7 @@ def main():
             hbonds_dict[int(t.parent.name),
                         int(''.join(filter(str.isdigit, t.name)))] = r
 
-        with open(str(PELE_sim_path.joinpath('hbonds.out')), 'w') as file:
+        with open(str(PELE_sim_path.joinpath(output_path)), 'w') as file:
             file.write(str(PELE_sim_path.name) + '\n')
             file.write('Epoch    Trajectory    Model    Hbonds' + '\n')
             for (epoch, traj_num), hbonds in hbonds_dict.items():
