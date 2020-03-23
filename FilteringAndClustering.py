@@ -137,7 +137,7 @@ def extract_ligand_properties(topology_path, resname):
     traj = md.load_pdb(str(topology_path))
     lig = traj.topology.select('resname {}'.format(resname))
     for atom in traj.atom_slice(lig).top.atoms:
-        if (atom.element != 'hydrogen'):
+        if (str(atom.element) != 'hydrogen'):
             n_heavy_atoms += 1
         molecular_weight += atom.element.mass
 
@@ -385,7 +385,7 @@ def main():
             print(at, end=',')
         print(atoms[-1])
     print(' - Golden H bonds set 2 ({} '.format(minimum_g2_conditions) +
-          'of them need to be fulfilled:')
+          'of them need to be fulfilled):')
     for res, atoms in golden_hbonds_2.items():
         print('   - {}:{}:'.format(*res), end='')
         for at in atoms[:-1]:
@@ -422,7 +422,7 @@ def main():
         ligand_heavy_atoms, ligand_mass = extract_ligand_properties(
             topology_path, lig_resname)
         print('   - Detected {} heavy atoms'.format(ligand_heavy_atoms))
-        print('   - Molecular weight: {}'.format(ligand_mass))
+        print('   - Molecular weight: {:.3f}'.format(ligand_mass))
 
         PELE_ids = extract_PELE_ids(reports)
 
