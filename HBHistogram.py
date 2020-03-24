@@ -258,7 +258,7 @@ def generate_barplot(dictionary, mode, lim, output_path):
 
         if (output_path.parent.is_dir()):
             plt.savefig(str(output_path), dpi=300, transparent=True,
-                     pad_inches=0.05)
+                        pad_inches=0.05)
             return
 
     plt.show()

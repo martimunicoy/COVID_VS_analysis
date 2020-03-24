@@ -35,11 +35,14 @@ def parse_args():
     parser.add_argument("--models_to_ignore", nargs='*',
                         metavar="N", type=int, default=[],
                         help="PELE models whose H bonds will be ignored")
+    parser.add_argument("--histogram_path",
+                        metavar="PATH", type=str, default=None,
+                        help="Output path to save the histrogram")
 
     args = parser.parse_args()
 
     return args.hbonds_data_paths, args.epochs_to_ignore, \
-        args.trajectories_to_ignore, args.models_to_ignore
+        args.trajectories_to_ignore, args.models_to_ignore, args.histogram_path
 
 
 def create_df(hb_path):
@@ -80,7 +83,7 @@ def get_n_hbonds_from_df(df, hb_path, epochs_to_ignore,
 
 def main():
     hb_paths, epochs_to_ignore, trajectories_to_ignore, \
-        models_to_ignore = parse_args()
+        models_to_ignore, histogram_path = parse_args()
 
     hb_paths_list = []
     if (type(hb_paths) == list):
@@ -98,11 +101,21 @@ def main():
                                         trajectories_to_ignore,
                                         models_to_ignore)
         total_n_hbonds += n_hbonds
-        print(' - {:100}: {:6.1f}'.format(str(Path(hb_path).parent),
-                                        np.mean(n_hbonds)))
+        if (len(n_hbonds) != 0):
+            print(' - {:100}: {:6.1f}'.format(str(Path(hb_path).parent),
+                                              np.mean(n_hbonds)))
 
     print('Average among all simulations: {:6.1f}'.format(
         np.mean(total_n_hbonds)))
+
+    if (histogram_path is not None):
+        n, bins, patches = plt.hist(total_n_hbonds, 10, facecolor='blue',
+                                    alpha=0.5, histtype='bar', ec='black')
+        plt.xlabel('Average number of hydrogen bonds per snapshot',
+                   fontweight='bold')
+        plt.ylabel('Number of simulations', fontweight='bold')
+        plt.xlim((0, 10))
+        plt.savefig(histogram_path)
 
 
 if __name__ == "__main__":
