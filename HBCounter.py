@@ -159,8 +159,6 @@ def main():
             hbonds_dict[int(t.parent.name),
                         int(''.join(filter(str.isdigit, t.name)))] = r
 
-        print(hbonds_dict)
-
         with open(str(PELE_sim_path.joinpath(output_path)), 'w') as file:
             file.write(str(PELE_sim_path.name) + '\n')
             file.write('Epoch    Trajectory    Model    Hbonds' + '\n')
