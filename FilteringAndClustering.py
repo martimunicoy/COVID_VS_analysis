@@ -430,6 +430,10 @@ def main():
 
         print(' - Detected {} sets of H bonds'.format(len(hbonds)))
 
+        if (len(hbonds) == 0):
+            print(' - Skipping simulation because no H bonds were found')
+            continue
+
         metrics = extract_ligand_metrics(reports, (ie_col, rmsd_col, 4),
                                          proc_number)
 
