@@ -416,7 +416,7 @@ def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
                      ie_by_PELE_id[representative_PELE_id], marker='x',
                      color='black', alpha=1, label='Representative\nstructure')
 
-    plt.xlabel('Initial structure RMSD ($\AA$)', fontweight='bold')
+    plt.xlabel('RMSD to initial structure ($\AA$)', fontweight='bold')
     plt.ylabel('Interaction energy ($kcal/mol$)', fontweight='bold')
 
     box = ax.get_position()
