@@ -13,6 +13,7 @@ from operator import itemgetter
 import mdtraj as md
 import numpy as np
 from sklearn.cluster import MeanShift
+from matplotlib import pyplot as plt
 
 # PELE imports
 from Helpers.PELEIterator import SimIt
@@ -91,13 +92,18 @@ def parse_args():
     parser.add_argument("-o", "--output_path",
                         metavar="PATH", type=str, default="filtering_results")
 
+    parser.add_argument('--generate_plots', dest='generate_plots',
+                        action='store_true')
+
+    parser.set_defaults(generate_plots=False)
+
     args = parser.parse_args()
 
     return args.traj_paths, args.ligand_resname, args.bandwidth, \
         args.processors_number, args.ie_col, args.rmsd_col, \
         args.topology_path, args.report_name, args.hbonds_path, \
         args.golden_hbonds_1, args.golden_hbonds_2, \
-        args.minimum_g2_conditions, args.output_path
+        args.minimum_g2_conditions, args.output_path, args.generate_plots
 
 
 def prepare_golden_dict(golden_hbonds):
@@ -368,12 +374,66 @@ def get_metrics_from_cluster(cluster_id, results, PELE_ids,
     return np.mean(ies), np.mean(rmsds), np.mean(tes), min_ie_id
 
 
+def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
+                  rmsd_by_PELE_id, ie_by_PELE_id, representative_PELE_id,
+                  output_path):
+    fig = plt.figure()
+    ax = plt.subplot(111)
+
+    x = []
+    y = []
+    for PELE_id in zip(*PELE_ids):
+        if (PELE_id in filtered_PELE_ids_1):
+            continue
+        x.append(rmsd_by_PELE_id[PELE_id])
+        y.append(ie_by_PELE_id[PELE_id])
+
+    h1 = plt.scatter(x, y, color='grey', alpha=0.5, label='All')
+
+    x = []
+    y = []
+    for PELE_id in filtered_PELE_ids_1:
+        if (PELE_id in filtered_PELE_ids_2):
+            continue
+        x.append(rmsd_by_PELE_id[PELE_id])
+        y.append(ie_by_PELE_id[PELE_id])
+
+    h2 = plt.scatter(x, y, color='red', alpha=0.5,
+                     label='H bond filter')
+
+    x = []
+    y = []
+    for PELE_id in filtered_PELE_ids_2:
+        if (PELE_id == representative_PELE_id):
+            continue
+        x.append(rmsd_by_PELE_id[PELE_id])
+        y.append(ie_by_PELE_id[PELE_id])
+
+    h3 = plt.scatter(x, y, color='blue', alpha=0.5,
+                     label='Energetic filter')
+
+    h4 = plt.scatter(rmsd_by_PELE_id[representative_PELE_id],
+                     ie_by_PELE_id[representative_PELE_id], marker='x',
+                     color='black', alpha=1, label='Representative\nstructure')
+
+    plt.xlabel('Initial structure RMSD ($\AA$)', fontweight='bold')
+    plt.ylabel('Interaction energy ($kcal/mol$)', fontweight='bold')
+
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width * 0.75, box.height])
+    plt.legend([h1, h2, h3, h4])
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+    plt.savefig(str(output_path.joinpath('plot.png')))
+
+
 def main():
     # Parse args
     PELE_sim_paths, lig_resname, bandwidth, proc_number, \
         ie_col, rmsd_col, topology_relative_path, report_name, \
         hbonds_relative_path, golden_hbonds_1, golden_hbonds_2, \
-        minimum_g2_conditions, output_relative_path = parse_args()
+        minimum_g2_conditions, output_relative_path, generate_plots \
+        = parse_args()
 
     golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
     golden_hbonds_2 = prepare_golden_dict(golden_hbonds_2)
@@ -456,34 +516,33 @@ def main():
         rmsd_by_PELE_id = get_metric_by_PELE_id(PELE_ids, rmsds)
         te_by_PELE_id = get_metric_by_PELE_id(PELE_ids, tes)
 
-        filtered_PELE_ids = filter_by_hbonds(hbonds, golden_hbonds_1,
-                                             golden_hbonds_2,
-                                             minimum_g2_conditions)
+        filtered_PELE_ids_1 = filter_by_hbonds(hbonds, golden_hbonds_1,
+                                               golden_hbonds_2,
+                                               minimum_g2_conditions)
 
-        print(' - H bond filtering: {} '.format(len(filtered_PELE_ids)) +
+        print(' - H bond filtering: {} '.format(len(filtered_PELE_ids_1)) +
               'structures were selected out of ' +
               '{}'.format(len(PELE_ids[0])))
 
-        if (len(filtered_PELE_ids) == 0):
+        if (len(filtered_PELE_ids_1) == 0):
             print(' - Skipping simulation because no model fulfills the ' +
                   'required conditions')
             continue
 
-        old_structures = len(filtered_PELE_ids)
-        filtered_PELE_ids = filter_by_energies(filtered_PELE_ids,
-                                               ie_by_PELE_id)
+        filtered_PELE_ids_2 = filter_by_energies(filtered_PELE_ids_1,
+                                                 ie_by_PELE_id)
 
-        print(' - Energetic filtering: {} '.format(len(filtered_PELE_ids)) +
+        print(' - Energetic filtering: {} '.format(len(filtered_PELE_ids_2)) +
               'structures were selected out of ' +
-              '{}'.format(old_structures))
+              '{}'.format(len(filtered_PELE_ids_1)))
 
-        if (len(filtered_PELE_ids) == 0):
+        if (len(filtered_PELE_ids_2) == 0):
             print(' - Skipping simulation because no model fulfills the ' +
                   'required conditions')
             continue
 
-        lig_coords, filtered_PELE_ids = extract_ligand_coords(
-            filtered_PELE_ids, trajectories, lig_resname, topology_path,
+        lig_coords, filtered_PELE_ids_2 = extract_ligand_coords(
+            filtered_PELE_ids_2, trajectories, lig_resname, topology_path,
             proc_number)
 
         print(' - Clustering filtered ligand coordinates')
@@ -499,7 +558,7 @@ def main():
         cluster_id, frequency = get_most_populated_cluster(p_dict)
 
         mean_ie, mean_rmsd, mean_te, representative_PELE_id = \
-            get_metrics_from_cluster(cluster_id, results, filtered_PELE_ids,
+            get_metrics_from_cluster(cluster_id, results, filtered_PELE_ids_2,
                                      ie_by_PELE_id, rmsd_by_PELE_id,
                                      te_by_PELE_id)
 
@@ -541,6 +600,11 @@ def main():
 
         rep_model = rep_traj[representative_PELE_id[2]]
         rep_model.save_pdb(str(output_path.joinpath('rep_structure.pdb')))
+
+        if (generate_plots):
+            generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
+                          rmsd_by_PELE_id, ie_by_PELE_id,
+                          representative_PELE_id, output_path)
 
 
 if __name__ == "__main__":
