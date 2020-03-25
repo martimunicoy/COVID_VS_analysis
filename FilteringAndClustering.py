@@ -376,6 +376,7 @@ def get_metrics_from_cluster(cluster_id, results, PELE_ids,
 
 def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
                   rmsd_by_PELE_id, ie_by_PELE_id, representative_PELE_id,
+                  results, cluster_id,
                   output_path):
     fig = plt.figure()
     ax = plt.subplot(111)
@@ -403,16 +404,28 @@ def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
 
     x = []
     y = []
-    for PELE_id in filtered_PELE_ids_2:
-        if (PELE_id == representative_PELE_id):
+    for r, PELE_id in zip(results, filtered_PELE_ids_2):
+        if (r == cluster_id):
             continue
         x.append(rmsd_by_PELE_id[PELE_id])
         y.append(ie_by_PELE_id[PELE_id])
 
-    h3 = plt.scatter(x, y, color='blue', alpha=0.5,
+    h3 = plt.scatter(x, y, color='green', alpha=0.5,
                      label='Energetic filter')
 
-    h4 = plt.scatter(rmsd_by_PELE_id[representative_PELE_id],
+    x = []
+    y = []
+    for r, PELE_id in zip(results, filtered_PELE_ids_2):
+        if (r == cluster_id):
+            if (PELE_id == representative_PELE_id):
+                continue
+            x.append(rmsd_by_PELE_id[PELE_id])
+            y.append(ie_by_PELE_id[PELE_id])
+
+    h4 = plt.scatter(x, y, color='blue', alpha=0.5,
+                     label='Selected cluster')
+
+    h5 = plt.scatter(rmsd_by_PELE_id[representative_PELE_id],
                      ie_by_PELE_id[representative_PELE_id], marker='x',
                      color='black', alpha=1, label='Representative\nstructure')
 
@@ -421,7 +434,7 @@ def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
 
     box = ax.get_position()
     ax.set_position([box.x0, box.y0, box.width * 0.75, box.height])
-    plt.legend([h1, h2, h3, h4])
+    plt.legend([h1, h2, h3, h4, h5])
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
     plt.savefig(str(output_path.joinpath('plot.png')))
@@ -604,7 +617,8 @@ def main():
         if (generate_plots):
             generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
                           rmsd_by_PELE_id, ie_by_PELE_id,
-                          representative_PELE_id, output_path)
+                          representative_PELE_id, results, cluster_id,
+                          output_path)
 
 
 if __name__ == "__main__":
