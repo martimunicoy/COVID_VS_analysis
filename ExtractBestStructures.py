@@ -42,11 +42,14 @@ def parse_args():
                         metavar="PATH", type=str,
                         default='output/topologies/topology_0.pdb',
                         help="Relative path to topology")
+    parser.add_argument("-l", "--ligand_resname",
+                        metavar="LIG", type=str, default='LIG',
+                        help="Ligand residue name")
 
     args = parser.parse_args()
 
     return args.sim_paths, args.PELE_output_path, args.processors_number, \
-        args.output_path, args.ie_col, args.topology_path
+        args.output_path, args.ie_col, args.topology_path, args.ligand_resname
 
 
 def parallel_metrics_getter(ie_col, report):
@@ -64,10 +67,24 @@ def parallel_metrics_getter(ie_col, report):
     return (tes, ies)
 
 
+def extract_ligand_properties(topology_path, resname):
+    n_heavy_atoms = 0
+    molecular_weight = 0
+
+    traj = md.load_pdb(str(topology_path))
+    lig = traj.topology.select('resname {}'.format(resname))
+    for atom in traj.atom_slice(lig).top.atoms:
+        if (str(atom.element) != 'hydrogen'):
+            n_heavy_atoms += 1
+        molecular_weight += atom.element.mass
+
+    return n_heavy_atoms, molecular_weight
+
+
 def main():
     # Parse args
     PELE_sim_paths, PELE_output_path, proc_number, output_relative_path, \
-        ie_col, topology_relative_path = parse_args()
+        ie_col, topology_relative_path, lig_resname = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -109,14 +126,19 @@ def main():
                                                         repo.name))),
                                      i)
 
+        ligand_heavy_atoms, ligand_mass = extract_ligand_properties(
+            topology_path, lig_resname)
+
         output_path = PELE_sim_path.joinpath(output_relative_path)
 
         if (not output_path.is_dir()):
             os.mkdir(str(output_path))
 
         with open(str(output_path.joinpath('results.out')), 'w') as f:
+            f.write('lig_heavy_atoms,lig_mass,')
             f.write('best_total_energy,best_interaction_energy\n')
-            f.write('{},{}\n'.format(min_te, min_ie))
+            f.write('{},{:.3f},{},{}\n'.format(ligand_heavy_atoms, ligand_mass,
+                                               min_te, min_ie))
 
         if (min_te_PDB_id is not None):
             t = md.load(str(min_te_PDB_id[0].joinpath(
