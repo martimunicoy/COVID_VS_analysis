@@ -100,6 +100,18 @@ def parse_args():
     parser.add_argument('--generate_plots', dest='generate_plots',
                         action='store_true')
 
+    parser.add_argument('--representative_extraction_method',
+                        choices=["interaction_energy",
+                                 "center",
+                                 "total_energy"],
+                        type=str, metavar="MODE",
+                        default="interaction_energy",
+                        help="Method to extract the representative structure" +
+                        " from the final selected cluster. The structure can" +
+                        " be selected by minimizing the interaction energy, " +
+                        "the total energy or by considering the one that is " +
+                        "closer to the center of the cluster.")
+
     parser.set_defaults(generate_plots=False)
 
     args = parser.parse_args()
@@ -108,7 +120,8 @@ def parse_args():
         args.processors_number, args.ie_col, args.rmsd_col, \
         args.topology_path, args.report_name, args.hbonds_path, \
         args.golden_hbonds_1, args.golden_hbonds_2, \
-        args.minimum_g2_conditions, args.output_path, args.generate_plots
+        args.minimum_g2_conditions, args.output_path, args.generate_plots, \
+        args.representative_extraction_method
 
 
 def prepare_golden_dict(golden_hbonds):
@@ -313,7 +326,7 @@ def clusterize(lig_coords, bandwidth, proc_number):
                    n_jobs=proc_number,
                    cluster_all=True)
 
-    return gm.fit_predict(lig_coords)
+    return gm.fit_predict(lig_coords), gm.cluster_centers_
 
 
 def calculate_probabilities(cluster_results):
@@ -329,29 +342,46 @@ def calculate_probabilities(cluster_results):
     return p_dict
 
 
-def get_most_populated_cluster(p_dict):
-    return sorted(p_dict.items(), key=itemgetter(1), reverse=True)[0]
+def get_most_populated_cluster(p_dict, cluster_centers_array):
+    cluster_index = sorted(p_dict.items(), key=itemgetter(1),
+                           reverse=True)[0][0]
+    return cluster_index, cluster_centers_array[cluster_index]
 
 
 def get_metrics_from_cluster(cluster_id, results, PELE_ids,
                              ie_by_PELE_id, rmsd_by_PELE_id,
-                             te_by_PELE_id):
+                             te_by_PELE_id, lig_coords,
+                             cluster_center,
+                             representative_extraction_method):
     ies = []
     rmsds = []
     tes = []
-    min_ie = 0
-    min_ie_id = None
-    for r, PELE_id in zip(results, PELE_ids):
+    best_metric = None
+    best_id = None
+    for i, (r, PELE_id) in enumerate(zip(results, PELE_ids)):
         if (r == cluster_id):
             ies.append(ie_by_PELE_id[PELE_id])
             rmsds.append(rmsd_by_PELE_id[PELE_id])
             tes.append(te_by_PELE_id[PELE_id])
 
-            if (ie_by_PELE_id[PELE_id] < min_ie):
-                min_ie = ie_by_PELE_id[PELE_id]
-                min_ie_id = PELE_id
+            if (representative_extraction_method == "center"):
+                diff = lig_coords[i] - cluster_center
+                sq_dist = np.dot(diff, diff)
+                if (best_metric is None or sq_dist < best_metric):
+                    best_metric = sq_dist
+                    best_id = PELE_id
 
-    return np.mean(ies), np.mean(rmsds), np.mean(tes), min_ie_id
+            elif (representative_extraction_method == "interaction_energy"):
+                if (ie_by_PELE_id[PELE_id] < best_metric):
+                    best_metric = ie_by_PELE_id[PELE_id]
+                    best_id = PELE_id
+
+            elif (representative_extraction_method == "total_energy"):
+                if (te_by_PELE_id[PELE_id] < best_metric):
+                    best_metric = te_by_PELE_id[PELE_id]
+                    best_id = PELE_id
+
+    return np.mean(ies), np.mean(rmsds), np.mean(tes), best_id
 
 
 def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
@@ -425,8 +455,8 @@ def main():
     PELE_sim_paths, lig_resname, bandwidth, proc_number, \
         ie_col, rmsd_col, topology_relative_path, report_name, \
         hbonds_relative_path, golden_hbonds_1, golden_hbonds_2, \
-        minimum_g2_conditions, output_relative_path, generate_plots \
-        = parse_args()
+        minimum_g2_conditions, output_relative_path, generate_plots, \
+        representative_extraction_method = parse_args()
 
     golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
     golden_hbonds_2 = prepare_golden_dict(golden_hbonds_2)
@@ -539,7 +569,8 @@ def main():
             proc_number)
 
         print(' - Clustering filtered ligand coordinates')
-        results = clusterize(lig_coords, bandwidth, proc_number)
+        results, cluster_centers = clusterize(lig_coords, bandwidth,
+                                              proc_number)
 
         p_dict = calculate_probabilities(results)
 
@@ -548,12 +579,14 @@ def main():
         for c, f in sorted(p_dict.items(), key=itemgetter(0)):
             print('   - {:3d}: {:3.2f}'.format(c, f))
 
-        cluster_id, frequency = get_most_populated_cluster(p_dict)
+        cluster_id, cluster_center = get_most_populated_cluster(
+            p_dict, cluster_centers)
 
         mean_ie, mean_rmsd, mean_te, representative_PELE_id = \
             get_metrics_from_cluster(cluster_id, results, filtered_PELE_ids_2,
                                      ie_by_PELE_id, rmsd_by_PELE_id,
-                                     te_by_PELE_id)
+                                     te_by_PELE_id, lig_coords, cluster_center,
+                                     representative_extraction_method)
 
         output_path = PELE_sim_path.joinpath(output_relative_path)
 
