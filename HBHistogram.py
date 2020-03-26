@@ -9,9 +9,17 @@ from pathlib import Path
 
 # External imports
 import numpy as np
-import matplotlib
+import matplotlib as mpl
+#mpl.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import cm
+
+# PELE imports
+from Helpers.PELEIterator import SimIt
+from Helpers.ReportUtils import extract_PELE_ids
+from Helpers.ReportUtils import extract_metrics
+from Helpers.ReportUtils import get_metric_by_PELE_id
+
 
 # Script information
 __author__ = "Marti Municoy, Carles Perez"
@@ -29,7 +37,8 @@ def parse_args():
 
     parser.add_argument("-m", "--mode", choices=["count",
                                                  "frequent_interactions",
-                                                 "relative_frequency"],
+                                                 "relative_frequency",
+                                                 "mean_energies"],
                         type=str, metavar="MODE",
                         default="count",
                         help="Selection of computation mode: " +
@@ -38,7 +47,8 @@ def parse_args():
                         "present at least in a 10%% of the structures of" +
                         " the simulation, (3) relative_frequency - mean " +
                         "of interacting residues frequencies for each " +
-                        "ligand.")
+                        "ligand, (4) mean_energies - mean interaction " +
+                        "energies per H bond are calculated")
     parser.add_argument("-l", "--lim",
                         metavar="L", type=float, default='0.1',
                         help="Frequency limit for frequent_interations method")
@@ -54,12 +64,22 @@ def parse_args():
     parser.add_argument("-o", "--output",
                         metavar="PATH", type=str, default=None,
                         help="Output path to save the plot")
+    parser.add_argument("-n", "--processors_number",
+                        metavar="N", type=int, default=None,
+                        help="Number of processors")
+    parser.add_argument("--PELE_output_path",
+                        metavar="PATH", type=str, default='output',
+                        help="Relative path to PELE output folder")
+    parser.add_argument("--PELE_report_name",
+                        metavar="PATH", type=str, default='report',
+                        help="Name of PELE's reports")
 
     args = parser.parse_args()
 
     return args.hbonds_data_paths, args.mode, args.lim, \
         args.epochs_to_ignore, args.trajectories_to_ignore, \
-        args.models_to_ignore, args.output
+        args.models_to_ignore, args.output, args.processors_number, \
+        args.PELE_output_path, args.PELE_report_name
 
 
 def create_df(hb_path):
@@ -73,7 +93,7 @@ def create_df(hb_path):
 
 def get_hbond_atoms_from_df(df, hb_path, epochs_to_ignore,
                             trajectories_to_ignore, models_to_ignore):
-    hbond_atoms = []
+    hbond_atoms = defaultdict(list)
 
     for row in df:
         try:
@@ -91,7 +111,8 @@ def get_hbond_atoms_from_df(df, hb_path, epochs_to_ignore,
         try:
             residues = row[3].split(',')
             for residue in residues:
-                hbond_atoms.append(residue.split(":"))
+                hbond_atoms[(epoch, trajectory, model)].append(
+                    residue.split(":"))
         except IndexError:
             pass
 
@@ -101,37 +122,31 @@ def get_hbond_atoms_from_df(df, hb_path, epochs_to_ignore,
 def count(hbond_atoms):
     counter = defaultdict(dict)
 
-    for (chain, residue, atom) in hbond_atoms:
-        counter[(chain, residue)][atom] = \
-            counter[(chain, residue)].get(atom, 0) + 1
+    for _, hbonds in hbond_atoms.items():
+        for (chain, residue, atom) in hbonds:
+            counter[(chain, residue)][atom] = \
+                counter[(chain, residue)].get(atom, 0) + 1
 
     return counter
 
 
-def count_norm(hbond_atoms, df):
+def count_norm(hbond_atoms):
     counter = defaultdict(dict)
 
     if (len(hbond_atoms) == 0):
         return counter
 
-    number_of_snapshots = len(df)
+    number_of_snapshots = len(hbond_atoms)
     norm_factor = 1 / number_of_snapshots
 
-    for (chain, residue, atom) in hbond_atoms:
-        counter[(chain, residue)][atom] = \
-            counter[(chain, residue)].get(atom, 0) + 1
+    for _, hbonds in hbond_atoms.items():
+        for (chain, residue, atom) in hbonds:
+            counter[(chain, residue)][atom] = \
+                counter[(chain, residue)].get(atom, 0) + 1
 
     for residue, atom_freq in counter.items():
         for atom, freq in atom_freq.items():
             counter[residue][atom] *= norm_factor
-
-    return counter
-
-
-def normalize(counter, total):
-    for residue, atom_freq in counter.items():
-        for atom, freq in atom_freq.items():
-            counter[residue][atom] = freq / total
 
     return counter
 
@@ -146,6 +161,34 @@ def discard_non_frequent(counter, lim=0.1):
                     new_counter[(chain, residue)].get(atom, 0) + 1
 
     return new_counter
+
+
+def count_energy(hbond_atoms, ie_by_PELE_id):
+    counter = defaultdict(lambda: defaultdict(list))
+    for PELE_id, hbs in hbond_atoms.items():
+        # Preventing repeated H bonds in the same snapshot
+        for (chain, residue, atom) in set(map(tuple, hbs)):
+            counter[(chain, residue)][atom].append(ie_by_PELE_id[PELE_id])
+
+    # Calculate mean and sum of means
+    sum_of_means = float(0.0)
+    for (chain, residue), atom_ies in counter.items():
+        for atom, ies in atom_ies.items():
+            ies_mean = np.mean(ies)
+            counter[(chain, residue)][atom] = ies_mean
+            sum_of_means += ies_mean
+
+    if (sum_of_means == 0):
+        return defaultdict(dict)
+
+    norm_factor = 1 #/ sum_of_means
+
+    # Calculate relative energy
+    for (chain, residue), atom_ies in counter.items():
+        for atom, ies in atom_ies.items():
+            counter[(chain, residue)][atom] *= norm_factor
+
+    return counter
 
 
 def combine_results(general_results, mode):
@@ -179,6 +222,18 @@ def combine_results(general_results, mode):
         for (chain, residue, atom), freqs in counter.items():
             combined_results[(chain, residue)][atom] = np.mean(freqs)
 
+    elif (mode == "mean_energies"):
+        ie_combiner = defaultdict(lambda: defaultdict(list))
+        atom_set = set()
+        for _, hbonds in general_results.items():
+            for residue, atom_ies in hbonds.items():
+                for atom, ie in atom_ies.items():
+                    ie_combiner[residue][atom].append(ie)
+
+        for residue, atom_ies in ie_combiner.items():
+            for atom, ies in atom_ies.items():
+                combined_results[residue][atom] = np.mean(ies)
+
     return combined_results
 
 
@@ -196,22 +251,26 @@ def generate_barplot(dictionary, mode, lim, output_path):
     sub_ylabels = []
 
     # colormap handlers
-    norm = matplotlib.colors.Normalize(0, 10)
+    norm = mpl.colors.Normalize(0, 10)
     cmap = cm.get_cmap('tab10')
     color_index = 0
 
-    max_freq = 0
+    max_freq = None
+    min_freq = None
     for residue, atom_freq in dictionary.items():
         for atom, freq in atom_freq.items():
-            if (freq > max_freq):
+            if (max_freq is None or freq > max_freq):
                 max_freq = freq
+            if (min_freq is None or freq < min_freq):
+                min_freq = freq
 
     for residue, atom_freq in sorted(dictionary.items()):
         _ys = []
         jump = False
         for atom, freq in sorted(atom_freq.items()):
-            if (freq < max_freq / 100):
-                continue
+            if (mode != 'mean_energies'):
+                if (freq < max_freq / 100):
+                    continue
             _ys.append(y)
             sub_ylabels.append(atom)
             sub_xs.append(freq)
@@ -244,7 +303,16 @@ def generate_barplot(dictionary, mode, lim, output_path):
         plt.xlabel('Absolut H bond counts with frequencies above ' +
                    '{}'.format(lim), fontweight='bold')
 
-    offset = max_freq * 0.025
+    elif (mode == "mean_energies"):
+        ax.set_xlim(max_freq + (max_freq - min_freq) * 0.05,
+                    min_freq - (max_freq - min_freq) * 0.05)
+        plt.xlabel('Average of mean total energies for each H bond',
+                   fontweight='bold')
+
+    if (mode == 'mean_energies'):
+        offset = 0
+    else:
+        offset = max_freq * 0.025
 
     for sub_x, sub_y, sub_ylabel in zip(sub_xs, sub_ys, sub_ylabels):
         ax.text(sub_x + offset, sub_y, sub_ylabel.strip(),
@@ -266,7 +334,8 @@ def generate_barplot(dictionary, mode, lim, output_path):
 
 def main():
     hb_paths, mode, lim, epochs_to_ignore, trajectories_to_ignore, \
-        models_to_ignore, output_path = parse_args()
+        models_to_ignore, output_path, proc_number, \
+        PELE_output_path, PELE_report_name = parse_args()
 
     hb_paths_list = []
     if (type(hb_paths) == list):
@@ -277,6 +346,8 @@ def main():
     general_results = {}
     for hb_path in hb_paths_list:
         df = create_df(hb_path)
+        # Calculate hbond_atoms, which is a dict with PELE_ids as key and
+        # corresponding lists of H bonds as values
         hbond_atoms = get_hbond_atoms_from_df(df, hb_path,
                                               epochs_to_ignore,
                                               trajectories_to_ignore,
@@ -286,11 +357,27 @@ def main():
             counter = count(hbond_atoms)
 
         elif (mode == "relative_frequency"):
-            counter = count_norm(hbond_atoms, df)
+            counter = count_norm(hbond_atoms)
 
-        elif mode == "frequent_interactions":
-            counter = count_norm(hbond_atoms, df)
+        elif (mode == "frequent_interactions"):
+            counter = count_norm(hbond_atoms)
             counter = discard_non_frequent(counter, lim)
+
+        elif (mode == "mean_energies"):
+            sim_it = SimIt(Path(hb_path).parent)
+            sim_it.build_repo_it(PELE_output_path, 'report')
+            reports = [repo for repo in sim_it.repo_it]
+
+            PELE_ids = extract_PELE_ids(reports)
+            metrics = extract_metrics(reports, (4, ), proc_number)
+
+            ies = []
+            for ies_chunk in metrics:
+                ies.append(list(map(float, np.concatenate(ies_chunk))))
+
+            ie_by_PELE_id = get_metric_by_PELE_id(PELE_ids, ies)
+
+            counter = count_energy(hbond_atoms, ie_by_PELE_id)
 
         general_results[hb_path] = counter
 

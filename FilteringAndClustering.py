@@ -13,10 +13,15 @@ from operator import itemgetter
 import mdtraj as md
 import numpy as np
 from sklearn.cluster import MeanShift
+import matplotlib as mpl
+#mpl.use('Agg')
 from matplotlib import pyplot as plt
 
 # PELE imports
 from Helpers.PELEIterator import SimIt
+from Helpers.ReportUtils import extract_PELE_ids
+from Helpers.ReportUtils import extract_metrics
+from Helpers.ReportUtils import get_metric_by_PELE_id
 
 
 # Script information
@@ -150,23 +155,6 @@ def extract_ligand_properties(topology_path, resname):
     return n_heavy_atoms, molecular_weight
 
 
-def extract_PELE_ids(reports):
-    epochs = []
-    trajectories = []
-    models = []
-
-    for repo in reports:
-        with open(str(repo), 'r') as f:
-            f.readline()
-            for i, line in enumerate(f):
-                epochs.append(int(repo.parent.name))
-                trajectories.append(
-                    int(''.join(filter(str.isdigit, repo.name))))
-                models.append(i)
-
-    return epochs, trajectories, models
-
-
 def extract_hbonds(hbonds_path):
     hbonds = defaultdict(list)
 
@@ -224,14 +212,6 @@ def extract_ligand_metrics(reports, cols, proc_number):
                            reports)
 
     return results
-
-
-def get_metric_by_PELE_id(PELE_ids, metrics):
-    metric_by_PELE_id = {}
-    for e, t, m, metric in zip(*PELE_ids, np.concatenate(metrics)):
-        metric_by_PELE_id[(e, t, m)] = metric
-
-    return metric_by_PELE_id
 
 
 def filter_by_hbonds(hbonds, golden_hbonds_1, golden_hbonds_2,
