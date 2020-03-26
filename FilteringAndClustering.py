@@ -14,7 +14,7 @@ import mdtraj as md
 import numpy as np
 from sklearn.cluster import MeanShift
 import matplotlib as mpl
-#mpl.use('Agg')
+mpl.use('Agg')
 from matplotlib import pyplot as plt
 
 # PELE imports
