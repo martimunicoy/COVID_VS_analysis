@@ -372,12 +372,14 @@ def get_metrics_from_cluster(cluster_id, results, PELE_ids,
                     best_id = PELE_id
 
             elif (representative_extraction_method == "interaction_energy"):
-                if (ie_by_PELE_id[PELE_id] < best_metric):
+                if (best_metric is None or
+                        ie_by_PELE_id[PELE_id] < best_metric):
                     best_metric = ie_by_PELE_id[PELE_id]
                     best_id = PELE_id
 
             elif (representative_extraction_method == "total_energy"):
-                if (te_by_PELE_id[PELE_id] < best_metric):
+                if (best_metric is None or
+                        te_by_PELE_id[PELE_id] < best_metric):
                     best_metric = te_by_PELE_id[PELE_id]
                     best_id = PELE_id
 
