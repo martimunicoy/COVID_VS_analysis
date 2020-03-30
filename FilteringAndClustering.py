@@ -386,6 +386,16 @@ def get_metrics_from_cluster(cluster_id, results, PELE_ids,
     return np.mean(ies), np.mean(rmsds), np.mean(tes), best_id
 
 
+def get_ligand_rotatable_bonds(lig_rotamers_path):
+    counter = 0
+    with open(str(lig_rotamers_path), 'r') as lrl:
+        for line in lrl:
+            line = line.strip()
+            if (line.startswith('sidelib')):
+                counter += 1
+    return counter
+
+
 def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
                   rmsd_by_PELE_id, ie_by_PELE_id, representative_PELE_id,
                   results, cluster_id,
@@ -483,6 +493,10 @@ def main():
         print(' - Extracting ligand coords from {}'.format(PELE_sim_path))
         hbonds_path = PELE_sim_path.joinpath(hbonds_relative_path)
         topology_path = PELE_sim_path.joinpath(topology_relative_path)
+        lig_rotamers_path = PELE_sim_path.joinpath('DataLocal/' +
+                                                   'LigandRotamerLibs/' +
+                                                   '{}.rot.assign'.format(
+                                                       lig_resname))
 
         if (not topology_path.is_file()):
             print(' - Skipping simulation because topology file with ' +
@@ -492,6 +506,11 @@ def main():
         if (not hbonds_path.is_file()):
             print(' - Skipping simulation because hbonds file was ' +
                   'missing')
+            continue
+
+        if (not lig_rotamers_path.is_file()):
+            print(' - Skipping simulation because ligand rotamer library was' +
+                  ' missing')
             continue
 
         sim_it = SimIt(PELE_sim_path)
@@ -607,15 +626,17 @@ def main():
               'model: {}'.format(representative_PELE_id[2]))
 
         with open(str(output_path.joinpath('metrics.out')), 'w') as f:
-            f.write('{}    {}    {}    {}    {}'.format(
-                'Heavy atoms', 'Molecular weight', 'Mean Total Energy',
-                'Mean Interaction Energy',
+            f.write('{}    {}    {}    {}    {}    {}'.format(
+                'Heavy atoms', 'Molecular weight', 'Rotatable bonds',
+                'Mean Total Energy', 'Mean Interaction Energy',
                 'Mean RMSD (respect to initial struc.)',) +
                 '                                {}'.format(
                 'PELE ID'))
             f.write('\n')
             f.write('{:11d}    {:16.3f}    '.format(ligand_heavy_atoms,
                                                     ligand_mass))
+            f.write('{:15d}    '.format(get_ligand_rotatable_bonds(
+                lig_rotamers_path)))
             f.write('{: 17.1f}    {: 23.1f}    {: 37.1f}    '.format(
                 mean_te, mean_ie, mean_rmsd, *representative_PELE_id))
             f.write('Epoch:{:3d} Trajectory:{:3d} Model:{:4d}\n'.format(
