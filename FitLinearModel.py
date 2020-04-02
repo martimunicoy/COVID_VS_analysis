@@ -8,12 +8,19 @@ import pickle
 
 # External imports
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn import metrics
-from sklearn.model_selection import cross_validate
+from sklearn.model_selection import cross_validate, train_test_split
+from sklearn.model_selection import GridSearchCV, KFold
+from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LinearRegression, Lasso, Ridge
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.ensemble import VotingRegressor
+from sklearn.neighbors import KNeighborsClassifier
 from matplotlib import pyplot as plt
 import numpy as np
+
+import warnings
+warnings.filterwarnings("ignore")
 
 
 # Script information
@@ -38,12 +45,13 @@ def parse_args():
     return args.descriptors_path, args.labels_path, args.output
 
 
-def generate_classification_model(X_train, y_train, X_test, y_test):
-    print(' - Generating classification model')
-    log_reg = LogisticRegression()
-    results = cross_validate(log_reg, X_train, y_train, cv=4,
+def generate_logistic_model(X_train, y_train, X_test, y_test):
+    print(' - Generating logistic regression model')
+    log_reg = LogisticRegression(random_state=1993)
+    cv = KFold(n_splits=5)
+    results = cross_validate(log_reg, X_train, y_train, cv=cv,
                              return_estimator=True,
-                             scoring='accuracy')
+                             scoring='balanced_accuracy')
 
     best_model = None
     best_scorer = 0
@@ -52,23 +60,136 @@ def generate_classification_model(X_train, y_train, X_test, y_test):
             best_scorer = s
             best_model = m
 
+    print('   - Cross-validation results:')
+    print('     - Balanced accuracy:', np.mean(results['test_score']))
+
     y_pred = best_model.predict(X_test)
 
-    print("   - Confusion matrix:")
+    print("   - Test set results:")
+    print("     - Confusion matrix:")
     confusion_matrix = metrics.confusion_matrix(y_test, y_pred)
-    print("      | {} | {} |".format(*confusion_matrix[0]))
-    print("      | {} | {} |".format(*confusion_matrix[1]))
-    print("   - Accuracy:", metrics.accuracy_score(y_test, y_pred))
-    print("   - Precision:", metrics.precision_score(y_test, y_pred))
-    print("   - Recall:", metrics.recall_score(y_test, y_pred))
+    print("        | {} | {} |".format(*confusion_matrix[0]))
+    print("        | {} | {} |".format(*confusion_matrix[1]))
+    print("     - Accuracy:", metrics.accuracy_score(y_test, y_pred))
+    print("     - Balanced accuracy:",
+          metrics.balanced_accuracy_score(y_test, y_pred))
+    print("     - Precision:", metrics.precision_score(y_test, y_pred))
+    print("     - Recall:", metrics.recall_score(y_test, y_pred))
 
     return best_model
 
 
-def generate_linear_model(X_train, y_train, X_test, y_test):
-    print(' - Generating linear model')
+def generate_forest_model(X_train, y_train, X_test, y_test):
+    print(' - Generating random forest model')
+
+    for_cla = RandomForestClassifier(class_weight='balanced',
+                                     random_state=1993)
+    cv = KFold(n_splits=5)
+    params_rf = {'n_estimators': [50, 100], 'max_depth': [2, 3, 4]}
+    for_cla_gs = GridSearchCV(for_cla, params_rf, cv=cv,
+                              scoring='balanced_accuracy')
+    for_cla_gs.fit(X_train, y_train)
+
+    print('   - Cross-validation results:')
+    print('     - Balanced accuracy:', for_cla_gs.best_score_)
+
+    best_model = for_cla_gs.best_estimator_
+
+    y_pred = best_model.predict(X_test)
+
+    print("   - Best parameters:")
+    print("     - {}: {}".format(
+        *[(i, j) for i, j in list(for_cla_gs.best_params_.items())][0]))
+    print("     - {}: {}".format(
+        *[(i, j) for i, j in list(for_cla_gs.best_params_.items())][1]))
+    print("   - Test set results:")
+    print("     - Confusion matrix:")
+    confusion_matrix = metrics.confusion_matrix(y_test, y_pred)
+    print("        | {} | {} |".format(*confusion_matrix[0]))
+    print("        | {} | {} |".format(*confusion_matrix[1]))
+    print("     - Accuracy:", metrics.accuracy_score(y_test, y_pred))
+    print("     - Balanced accuracy:",
+          metrics.balanced_accuracy_score(y_test, y_pred))
+    print("     - Precision:", metrics.precision_score(y_test, y_pred))
+    print("     - Recall:", metrics.recall_score(y_test, y_pred))
+
+    return best_model
+
+
+def generate_neighbors_model(X_train, y_train, X_test, y_test):
+    print(' - Generating k-nearest neighbors model')
+    for_cla = KNeighborsClassifier()
+    cv = KFold(n_splits=5)
+    params_rf = {'n_neighbors': [1, 2, 3, 4, 5]}
+    for_cla_gs = GridSearchCV(for_cla, params_rf, cv=cv,
+                              scoring='balanced_accuracy')
+    for_cla_gs.fit(X_train, y_train)
+
+    print('   - Cross-validation results:')
+    print('     - Balanced accuracy:', for_cla_gs.best_score_)
+
+    best_model = for_cla_gs.best_estimator_
+
+    y_pred = best_model.predict(X_test)
+
+    print("   - Best parameters:")
+    print("     - {}: {}".format(
+        *[(i, j) for i, j in list(for_cla_gs.best_params_.items())][0]))
+    print("   - Test set results:")
+    print("     - Confusion matrix:")
+    confusion_matrix = metrics.confusion_matrix(y_test, y_pred)
+    print("        | {} | {} |".format(*confusion_matrix[0]))
+    print("        | {} | {} |".format(*confusion_matrix[1]))
+    print("     - Accuracy:", metrics.accuracy_score(y_test, y_pred))
+    print("     - Balanced accuracy:",
+          metrics.balanced_accuracy_score(y_test, y_pred))
+    print("     - Precision:", metrics.precision_score(y_test, y_pred))
+    print("     - Recall:", metrics.recall_score(y_test, y_pred))
+
+    return best_model
+
+
+def generate_ensemble_classifier(models_to_combine,
+                                 X_train, y_train, X_test, y_test):
+    print(' - Generating ensemble model')
+
+    ensemble = VotingClassifier(estimators=models_to_combine, voting='soft')
+    cv = KFold(n_splits=5)
+    results = cross_validate(ensemble, X_train, y_train, cv=cv,
+                             return_estimator=True,
+                             scoring='balanced_accuracy')
+
+    best_model = None
+    best_scorer = 0
+    for m, s in zip(results['estimator'], results['test_score']):
+        if (best_model is None or best_scorer < s):
+            best_scorer = s
+            best_model = m
+
+    print('   - Cross-validation results:')
+    print('     - Balanced accuracy:', np.mean(results['test_score']))
+
+    y_pred = best_model.predict(X_test)
+
+    print("   - Test set results:")
+    print("     - Confusion matrix:")
+    confusion_matrix = metrics.confusion_matrix(y_test, y_pred)
+    print("        | {} | {} |".format(*confusion_matrix[0]))
+    print("        | {} | {} |".format(*confusion_matrix[1]))
+    print("     - Accuracy:", metrics.accuracy_score(y_test, y_pred))
+    print("     - Balanced accuracy:",
+          metrics.balanced_accuracy_score(y_test, y_pred))
+    print("     - Precision:", metrics.precision_score(y_test, y_pred))
+    print("     - Recall:", metrics.recall_score(y_test, y_pred))
+
+    return best_model
+
+
+def generate_regression_model(X_train, y_train, X_test, y_test):
+    print(' - Generating linear regression model')
     lin_reg = LinearRegression()
-    results = cross_validate(lin_reg, X_train, y_train, cv=2,
+    cv = KFold(n_splits=5)
+    results = cross_validate(lin_reg, X_train, y_train, cv=cv,
                              return_estimator=True,
                              scoring='r2')
 
@@ -82,9 +203,189 @@ def generate_linear_model(X_train, y_train, X_test, y_test):
 
     y_pred = best_model.predict(X_test)
 
-    print("   - r2:", metrics.r2_score(y_test, y_pred))
+    print('   - Cross-validation results:')
+    print('     - r2:', np.max(results['test_score']))
+    print("   - Coefficients:")
+    print("     - be / atoms : {}".format(best_model.coef_[0]))
+    print("     - rotamers : {}".format(best_model.coef_[1]))
+    print("     - internal : {}".format(best_model.coef_[2]))
+    print("   - Intercept:")
+    print("     - {}".format(best_model.intercept_))
+    print("   - Test set results:")
+    print("     - r2:", metrics.r2_score(y_test, y_pred))
 
-    return results
+    return best_model
+
+
+def generate_lasso_model(X_train, y_train, X_test, y_test):
+    print(' - Generating linear lasso model')
+    lin_las = Lasso()
+    cv = KFold(n_splits=5)
+    params_rf = {'alpha': np.arange(0, 1, 0.05)}
+    lin_las_gs = GridSearchCV(lin_las, params_rf, cv=cv,
+                              scoring='r2')
+    lin_las_gs.fit(X_train, y_train)
+
+    best_model = lin_las_gs.best_estimator_
+
+    y_pred = best_model.predict(X_test)
+
+    print('   - Cross-validation results:')
+    print('     - r2:', lin_las_gs.best_score_)
+    print("   - Best parameters:")
+    print("     - {}: {}".format(
+        *[(i, j) for i, j in list(lin_las_gs.best_params_.items())][0]))
+    print("   - Coefficients:")
+    print("     - be / atoms : {}".format(best_model.coef_[0]))
+    print("     - rotamers : {}".format(best_model.coef_[1]))
+    print("     - internal : {}".format(best_model.coef_[2]))
+    print("   - Intercept:")
+    print("     - {}".format(best_model.intercept_))
+    print("   - Test set results:")
+    print("     - r2:", metrics.r2_score(y_test, y_pred))
+
+    return best_model
+
+
+def generate_ridge_model(X_train, y_train, X_test, y_test):
+    print(' - Generating linear ridge model')
+    lin_rid = Ridge()
+    cv = KFold(n_splits=5)
+    results = cross_validate(lin_rid, X_train, y_train, cv=cv,
+                             return_estimator=True,
+                             scoring='r2')
+
+    best_model = None
+    best_scorer = 0
+
+    for m, s in zip(results['estimator'], results['test_score']):
+        if (best_model is None or best_scorer < s):
+            best_scorer = s
+            best_model = m
+
+    y_pred = best_model.predict(X_test)
+
+    print('   - Cross-validation results:')
+    print('     - r2:', np.max(results['test_score']))
+    print("   - Coefficients:")
+    print("     - be / atoms : {}".format(best_model.coef_[0]))
+    print("     - rotamers : {}".format(best_model.coef_[1]))
+    print("     - internal : {}".format(best_model.coef_[2]))
+    print("   - Intercept:")
+    print("     - {}".format(best_model.intercept_))
+    print("   - Test set results:")
+    print("     - r2:", metrics.r2_score(y_test, y_pred))
+
+    return best_model
+
+
+def generate_ensemble_regressor(models_to_combine,
+                                X_train, y_train, X_test, y_test):
+    print(' - Generating ensemble model')
+
+    ensemble = VotingRegressor(estimators=models_to_combine)
+    cv = KFold(n_splits=5)
+    results = cross_validate(ensemble, X_train, y_train, cv=cv,
+                             return_estimator=True,
+                             scoring='r2')
+
+    best_model = None
+    best_scorer = 0
+
+    for m, s in zip(results['estimator'], results['test_score']):
+        if (best_model is None or best_scorer < s):
+            best_scorer = s
+            best_model = m
+
+    y_pred = best_model.predict(X_test)
+
+    print('   - Cross-validation results:')
+    print('     - r2:', np.max(results['test_score']))
+    print("   - Test set results:")
+    print("     - r2:", metrics.r2_score(y_test, y_pred))
+
+    return best_model
+
+
+def plot_classification(activity_classifier_1, X_test, y_test,
+                        title, output_path):
+    disp = metrics. plot_confusion_matrix(activity_classifier_1,
+                                          X_test, y_test,
+                                          cmap=plt.cm.Blues)
+
+    disp.ax_.set_title(title)
+
+    plt.savefig(output_path)
+    plt.clf()
+    plt.cla()
+
+
+def plot_regressor(model, X_test, y_test, X_train, y_train, title,
+                   output_path):
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 6))
+    plt.subplots_adjust(left=0.15, bottom=0.3, right=0.95, top=0.9)
+    fig.suptitle(title, fontsize=16)
+
+    y_pred = model.predict(X_train)
+    ax1.plot(((min(y_train), max(y_train))), ((min(y_pred), max(y_pred))),
+             'k--', linewidth=1)
+    ax1.scatter(y_train, y_pred, color='red')
+    ax1.set_title("Cross-validation results")
+    ax1.set_ylabel("Predicted -pIC50")
+    ax1.set_xlabel("Experimental -pIC50")
+
+    y_pred = model.predict(X_test)
+    ax2.plot(((min(y_test), max(y_test))), ((min(y_pred), max(y_pred))),
+             'k--', linewidth=1)
+    ax2.scatter(y_test, y_pred, color='red')
+    ax2.set_title("Test set results")
+    ax2.set_xlabel("Experimental -pIC50")
+
+    try:
+        props = dict(boxstyle='round', facecolor='orange', alpha=0.5)
+        text = 'Coefficients:\n'
+        text += ' • be / atoms = {:.2f}\n'.format(model.coef_[0])
+        text += ' • rotamers = {:.2f}\n'.format(model.coef_[1])
+        text += ' • internal = {:.2f}'.format(model.coef_[2])
+        # place a text box in upper left in axes coords
+        plt.text(0.1, 0.1, text, fontsize=12,
+                 verticalalignment='center', bbox=props,
+                 transform=fig.transFigure)
+
+        text = 'Intercept:\n'
+        text += ' • {:.2f}'.format(model.intercept_)
+        plt.text(0.35, 0.1, text, fontsize=12,
+                 verticalalignment='center', bbox=props,
+                 transform=fig.transFigure)
+
+        text = 'Cross-validation r2:\n'
+        text += ' • {:.2f}'.format(model.score(X_train, y_train))
+        plt.text(0.55, 0.1, text, fontsize=12,
+                 verticalalignment='center', bbox=props,
+                 transform=fig.transFigure)
+
+        text = 'Test set r2:\n'
+        text += ' • {:.2f}'.format(model.score(X_test, y_test))
+        plt.text(0.8, 0.1, text, fontsize=12,
+                 verticalalignment='center', bbox=props,
+                 transform=fig.transFigure)
+
+    except AttributeError:
+        text = 'Cross-validation r2:\n'
+        text += ' • {:.2f}'.format(model.score(X_train, y_train))
+        plt.text(0.30, 0.1, text, fontsize=12,
+                 verticalalignment='center', bbox=props,
+                 transform=fig.transFigure)
+
+        text = 'Test set r2:\n'
+        text += ' • {:.2f}'.format(model.score(X_test, y_test))
+        plt.text(0.75, 0.1, text, fontsize=12,
+                 verticalalignment='center', bbox=props,
+                 transform=fig.transFigure)
+
+    plt.savefig(output_path)
+    plt.clf()
+    plt.cla()
 
 
 def main():
@@ -125,9 +426,11 @@ def main():
 
     # Split by activity
     f_dataset.loc[:, 'IC50'] = f_dataset.loc[:, 'IC50'].apply(pd.to_numeric)
-    f_dataset['pIC50'] = - np.log10(f_dataset.loc[:, 'IC50'])
+    f_dataset['pIC50'] = - np.log10(f_dataset.loc[:, 'IC50'] / 1000000)
     actives, inactives = [x for _, x in f_dataset.groupby(
         [f_dataset['IC50'] < 0])]
+
+    print(len(actives), len(inactives))
 
     # Convert activity in a boolean
     f_dataset['activity'] = f_dataset['IC50'] > 0
@@ -138,28 +441,108 @@ def main():
         f_dataset.loc[:, ['be / atoms', 'rotamers', 'internal']].to_numpy(),
         f_dataset['activity'].to_list(),
         train_size=0.75,
-        random_state=1993)
+        random_state=123,
+        stratify=f_dataset['activity'].to_list())
 
-    activity_classifier = generate_classification_model(X_train, y_train,
-                                                        X_test, y_test)
+    activity_classifier_1 = generate_logistic_model(X_train, y_train,
+                                                    X_test, y_test)
 
-    with open(str(output_path.joinpath('activity_classifier.pkl')), 'wb') \
+    with open(str(output_path.joinpath('activity_classifier_1.pkl')), 'wb') \
             as handle:
-        pickle.dump(activity_classifier, handle)
+        pickle.dump(activity_classifier_1, handle)
+
+    plot_classification(activity_classifier_1, X_test, y_test,
+                        "Activity logistic regression classification",
+                        str(output_path.joinpath('activity_classifier_1.png')))
+
+    activity_classifier_2 = generate_forest_model(X_train, y_train,
+                                                  X_test, y_test)
+
+    with open(str(output_path.joinpath('activity_classifier_2.pkl')), 'wb') \
+            as handle:
+        pickle.dump(activity_classifier_2, handle)
+
+    plot_classification(activity_classifier_2, X_test, y_test,
+                        "Activity random forest classification",
+                        str(output_path.joinpath('activity_classifier_2.png')))
+
+    activity_classifier_3 = generate_neighbors_model(X_train, y_train,
+                                                     X_test, y_test)
+
+    with open(str(output_path.joinpath('activity_classifier_3.pkl')), 'wb') \
+            as handle:
+        pickle.dump(activity_classifier_3, handle)
+
+    plot_classification(activity_classifier_3, X_test, y_test,
+                        "Activity k-nearest neighbor classification",
+                        str(output_path.joinpath('activity_classifier_3.png')))
+
+    activity_classifier_4 = generate_ensemble_classifier(
+        [('Logistic regression', activity_classifier_1),
+         ('Random forest', activity_classifier_2,),
+         ('k-nearest neighbors', activity_classifier_3)],
+        X_train, y_train, X_test, y_test)
+
+    with open(str(output_path.joinpath('activity_classifier_4.pkl')), 'wb') \
+            as handle:
+        pickle.dump(activity_classifier_4, handle)
+
+    plot_classification(activity_classifier_4, X_test, y_test,
+                        "Activity ensemble classification",
+                        str(output_path.joinpath('activity_classifier_4.png')))
 
     # Split data into training and test set
     X_train, X_test, y_train, y_test = train_test_split(
         actives.loc[:, ['be / atoms', 'rotamers', 'internal']].to_numpy(),
         actives['pIC50'].to_list(),
         train_size=0.75,
-        random_state=1993)
+        random_state=123)
 
-    affinity_predictor = generate_linear_model(X_train, y_train,
-                                               X_test, y_test)
+    affinity_predictor_1 = generate_regression_model(X_train, y_train,
+                                                     X_test, y_test)
 
-    with open(str(output_path.joinpath('affinity_predictor.pkl')), 'wb') \
-            as handle:
-        pickle.dump(affinity_predictor, handle)
+    with open(str(output_path.joinpath('affinity_predictor_1.pkl')),
+              'wb') as handle:
+        pickle.dump(affinity_predictor_1, handle)
+
+    plot_regressor(affinity_predictor_1, X_test, y_test, X_train, y_train,
+                   'Linear regression',
+                   str(output_path.joinpath('affinity_predictor_1.png')))
+
+    affinity_predictor_2 = generate_lasso_model(X_train, y_train,
+                                                X_test, y_test)
+
+    with open(str(output_path.joinpath('affinity_predictor_2.pkl')),
+              'wb') as handle:
+        pickle.dump(affinity_predictor_2, handle)
+
+    plot_regressor(affinity_predictor_2, X_test, y_test, X_train, y_train,
+                   'Lasso regression',
+                   str(output_path.joinpath('affinity_predictor_2.png')))
+
+    affinity_predictor_3 = generate_ridge_model(X_train, y_train,
+                                                X_test, y_test)
+
+    with open(str(output_path.joinpath('affinity_predictor_3.pkl')),
+              'wb') as handle:
+        pickle.dump(affinity_predictor_3, handle)
+
+    plot_regressor(affinity_predictor_3, X_test, y_test, X_train, y_train,
+                   'Ridge regression',
+                   str(output_path.joinpath('affinity_predictor_3.png')))
+
+    affinity_predictor_4 = generate_ensemble_regressor(
+        [('Linear regression', affinity_predictor_1),
+         ('Ridge regression', affinity_predictor_3)],
+        X_train, y_train, X_test, y_test)
+
+    with open(str(output_path.joinpath('affinity_predictor_4.pkl')),
+              'wb') as handle:
+        pickle.dump(affinity_predictor_4, handle)
+
+    plot_regressor(affinity_predictor_4, X_test, y_test, X_train, y_train,
+                   'Ensemble regression',
+                   str(output_path.joinpath('affinity_predictor_4.png')))
 
 
 if __name__ == "__main__":
