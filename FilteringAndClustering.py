@@ -343,9 +343,22 @@ def calculate_probabilities(cluster_results):
 
 
 def get_most_populated_cluster(p_dict, cluster_centers_array):
-    cluster_index = sorted(p_dict.items(), key=itemgetter(1),
-                           reverse=True)[0][0]
-    return cluster_index, cluster_centers_array[cluster_index]
+    ordered_clusters = sorted(p_dict.items(), key=itemgetter(1),
+                              reverse=True)
+    highest_population = ordered_clusters[0][1]
+
+    # Allow to count all clusters if there is a draw
+    selected_clusters = []
+    for c, p in sorted(p_dict.items(), key=itemgetter(1),
+                       reverse=True):
+        if (p == highest_population):
+            selected_clusters.append(c)
+
+    selected_centers = []
+    for c in selected_clusters:
+        selected_centers.append(cluster_centers_array[c])
+
+    return selected_clusters, selected_centers
 
 
 def get_metrics_from_cluster(cluster_id, results, PELE_ids,
@@ -601,14 +614,25 @@ def main():
         for c, f in sorted(p_dict.items(), key=itemgetter(0)):
             print('   - {:3d}: {:3.2f}'.format(c, f))
 
-        cluster_id, cluster_center = get_most_populated_cluster(
+        cluster_ids, cluster_centers = get_most_populated_cluster(
             p_dict, cluster_centers)
 
-        mean_ie, mean_rmsd, mean_te, representative_PELE_id = \
-            get_metrics_from_cluster(cluster_id, results, filtered_PELE_ids_2,
-                                     ie_by_PELE_id, rmsd_by_PELE_id,
-                                     te_by_PELE_id, lig_coords, cluster_center,
-                                     representative_extraction_method)
+        cluster_metrics = {}
+        for cluster_id, cluster_center in zip(cluster_ids, cluster_centers):
+            mean_ie, mean_rmsd, mean_te, representative_PELE_id = \
+                get_metrics_from_cluster(cluster_id, results,
+                                         filtered_PELE_ids_2, ie_by_PELE_id,
+                                         rmsd_by_PELE_id, te_by_PELE_id,
+                                         lig_coords, cluster_center,
+                                         representative_extraction_method)
+            cluster_metrics[cluster_id] = (mean_ie, mean_rmsd, mean_te,
+                                           representative_PELE_id)
+
+        # Get best cluster (lowest ie) among those that tied
+        for current_cluster_id, metrics in cluster_metrics.items():
+            if (metrics[0] < mean_ie):
+                cluster_id = current_cluster_id
+                mean_ie, mean_rmsd, mean_te, representative_PELE_id = metrics
 
         output_path = PELE_sim_path.joinpath(output_relative_path)
 
