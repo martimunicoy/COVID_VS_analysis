@@ -634,6 +634,11 @@ def main():
                 cluster_id = current_cluster_id
                 mean_ie, mean_rmsd, mean_te, representative_PELE_id = metrics
 
+        if (len(cluster_metrics) > 1):
+            print(' - Two or more clusters have same frequencies')
+            print('   - Cluster {} was selected as '.format(cluster_id) +
+                  'it has the lowest mean interaction energy')
+
         output_path = PELE_sim_path.joinpath(output_relative_path)
 
         if (not output_path.is_dir()):
