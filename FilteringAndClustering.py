@@ -490,6 +490,7 @@ def main():
     all_sim_it = SimIt(PELE_sim_paths)
 
     for PELE_sim_path in all_sim_it:
+        print('')
         print(' - Extracting ligand coords from {}'.format(PELE_sim_path))
         hbonds_path = PELE_sim_path.joinpath(hbonds_relative_path)
         topology_path = PELE_sim_path.joinpath(topology_relative_path)
@@ -615,6 +616,8 @@ def main():
             os.mkdir(str(output_path))
 
         print(' - Results')
+        print('   - Number of clusters:      {:25d}'.format(
+            len(cluster_centers)))
         print('   - Selected cluster:        {:25d}'.format(cluster_id))
         print('   - Mean total energy:       {:25.1f}'.format(mean_te))
         print('   - Mean interaction energy: {:25.1f}'.format(mean_ie))
@@ -626,10 +629,11 @@ def main():
               'model: {}'.format(representative_PELE_id[2]))
 
         with open(str(output_path.joinpath('metrics.out')), 'w') as f:
-            f.write('{}    {}    {}    {}    {}    {}'.format(
+            f.write('{}    {}    {}    {}    {}    {}    {}'.format(
                 'Heavy atoms', 'Molecular weight', 'Rotatable bonds',
                 'Mean Total Energy', 'Mean Interaction Energy',
-                'Mean RMSD (respect to initial struc.)',) +
+                'Mean RMSD (respect to initial struc.)',
+                'Number of clusters') +
                 '                                {}'.format(
                 'PELE ID'))
             f.write('\n')
@@ -639,6 +643,7 @@ def main():
                 lig_rotamers_path)))
             f.write('{: 17.1f}    {: 23.1f}    {: 37.1f}    '.format(
                 mean_te, mean_ie, mean_rmsd, *representative_PELE_id))
+            f.write('{: 18d}    '.format(len(cluster_centers)))
             f.write('Epoch:{:3d} Trajectory:{:3d} Model:{:4d}\n'.format(
                 *representative_PELE_id))
 
