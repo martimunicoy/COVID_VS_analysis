@@ -614,16 +614,16 @@ def main():
         for c, f in sorted(p_dict.items(), key=itemgetter(0)):
             print('   - {:3d}: {:3.2f}'.format(c, f))
 
-        cluster_ids, cluster_centers = get_most_populated_cluster(
+        cluster_ids, selected_centers = get_most_populated_cluster(
             p_dict, cluster_centers)
 
         cluster_metrics = {}
-        for cluster_id, cluster_center in zip(cluster_ids, cluster_centers):
+        for cluster_id, center in zip(cluster_ids, selected_centers):
             mean_ie, mean_rmsd, mean_te, representative_PELE_id = \
                 get_metrics_from_cluster(cluster_id, results,
                                          filtered_PELE_ids_2, ie_by_PELE_id,
                                          rmsd_by_PELE_id, te_by_PELE_id,
-                                         lig_coords, cluster_center,
+                                         lig_coords, center,
                                          representative_extraction_method)
             cluster_metrics[cluster_id] = (mean_ie, mean_rmsd, mean_te,
                                            representative_PELE_id)

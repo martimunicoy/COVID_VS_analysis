@@ -17,6 +17,8 @@ from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.ensemble import VotingRegressor
 from sklearn.neighbors import KNeighborsClassifier
 from matplotlib import pyplot as plt
+from matplotlib import cm
+from matplotlib.colors import Normalize
 import numpy as np
 from scipy.spatial.distance import cdist
 
@@ -202,6 +204,8 @@ def generate_regression_model(X_train, y_train, X_test, y_test):
             best_scorer = s
             best_model = m
 
+    print(X_test)
+
     y_pred = best_model.predict(X_test)
 
     print('   - Cross-validation results:')
@@ -322,7 +326,7 @@ def plot_classification(activity_classifier_1, X_test, y_test,
 
 
 def plot_regressor(model, X_test, y_test, X_train, y_train, title,
-                   output_path):
+                   output_path, nn=None, min_nn=1):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 6))
     plt.subplots_adjust(left=0.15, bottom=0.3, right=0.95, top=0.9)
     fig.suptitle(title, fontsize=16)
@@ -338,7 +342,19 @@ def plot_regressor(model, X_test, y_test, X_train, y_train, title,
     y_pred = model.predict(X_test)
     ax2.plot(((min(y_test), max(y_test))), ((min(y_pred), max(y_pred))),
              'k--', linewidth=1)
-    ax2.scatter(y_test, y_pred, color='red')
+    if (nn is None):
+        ax2.scatter(y_test, y_pred, color='red', c=nn)
+    else:
+        colormap = cm.get_cmap('Wistia', max(nn) - (min_nn - 1))
+        norm = Normalize(0, max(nn) - (min_nn - 1))
+        colormap.set_under('grey')
+        for x, y, n in zip(y_test, y_pred, nn):
+            ax2.scatter(x, y, c=[colormap(n - min_nn)], label=n)
+        fig.colorbar(cm.ScalarMappable(cmap=colormap, norm=norm), ax=ax2,
+                     extend='min')
+        X_test, y_test = filter_entries_by_nn(X_test, y_test,
+                                              nn,
+                                              min_nn=min_nn)
     ax2.set_title("Test set results")
     ax2.set_xlabel("Experimental -pIC50")
 
@@ -389,11 +405,11 @@ def plot_regressor(model, X_test, y_test, X_train, y_train, title,
     plt.cla()
 
 
-def domain_analysis(X_train, y_train, names=None):
+def domain_analysis(train_domain):
     print(" - Computing applicability domains")
 
     # Matrix of descriptor distances between entries
-    distances = np.array([cdist([x], X_train) for x in X_train])
+    distances = np.array([cdist([x], train_domain) for x in train_domain])
     distances_sorted = [np.sort(d[0]) for d in distances]
 
     # Discard 0s, which are distances to the same entry (diagonal
@@ -401,7 +417,7 @@ def domain_analysis(X_train, y_train, names=None):
     distances_matrix = [d[1:] for d in distances_sorted]
 
     # Empirical calculation of the smoothing parameter k
-    k = int(round(pow(len(X_train), 1 / 3)))
+    k = int(round(pow(len(train_domain), 1 / 3)))
 
     # Calculate the mean of first k distances for each sample
     d_means = [np.mean(d[:k][0]) for d in distances_matrix]
@@ -421,20 +437,41 @@ def domain_analysis(X_train, y_train, names=None):
         Dijs.append(allowed_distances)
         Kis.append(len(allowed_distances))
 
-    ti = []
+    thresholds = []
     for Dij, Ki in zip(Dijs, Kis):
-        print(Dij, Ki)
         if (Ki == 0):
-            ti.append(0)
+            thresholds.append(0)
         else:
-            ti.append(np.sum(Dij) / Ki)
+            thresholds.append(np.sum(Dij) / Ki)
 
-    ti = np.array(ti)
+    thresholds = np.array(thresholds)
 
     # Convert 0 to minimum value not zero
-    ti[ti == 0] = min(ti[ti != 0])
+    thresholds[thresholds == 0] = min(thresholds[thresholds != 0])
 
-    return ti
+    return thresholds
+
+
+def check_applicability_domain(train_domain, test_domain, thresholds):
+    print(" - Checking applicability domains")
+
+    # Matrix of descriptor distances between entries
+    distances = np.array([cdist([x], train_domain) for x in test_domain])
+
+    results = []
+    for Dijs in distances:
+        # get nearest neighbors
+        NN = len([j for j, Dij in enumerate(Dijs[0]) if Dij <= thresholds[j]])
+        results.append(NN)
+
+    return results
+
+
+def filter_entries_by_nn(X, y, nn, min_nn):
+    f_X = X[[i for i, _ in enumerate(X) if nn[i] >= min_nn]]
+    f_y = y[[i for i, _ in enumerate(y) if nn[i] >= min_nn]]
+
+    return f_X, f_y
 
 
 def main():
@@ -543,61 +580,71 @@ def main():
     # Split data into training and test set
     X_train, X_test, y_train, y_test = train_test_split(
         actives.loc[:, ['be / atoms', 'rotamers', 'internal']].to_numpy(),
-        actives['pIC50'].to_list(),
+        actives['pIC50'].to_numpy(),
         train_size=0.75,
         random_state=123)
 
-    thresholds = domain_analysis(X_train, y_train)
+    thresholds = domain_analysis(X_train)
 
-    print(thresholds)
+    nn_results = check_applicability_domain(X_train, X_test, thresholds)
 
-    return
-
+    min_nn = 0
+    f_X_test, f_y_test = filter_entries_by_nn(X_test, y_test,
+                                              nn_results,
+                                              min_nn=min_nn)
     affinity_predictor_1 = generate_regression_model(X_train, y_train,
-                                                     X_test, y_test)
+                                                     f_X_test, f_y_test)
 
     with open(str(output_path.joinpath('affinity_predictor_1.pkl')),
               'wb') as handle:
         pickle.dump(affinity_predictor_1, handle)
+        pickle.dump(thresholds, handle)
 
     plot_regressor(affinity_predictor_1, X_test, y_test, X_train, y_train,
                    'Linear regression',
-                   str(output_path.joinpath('affinity_predictor_1.png')))
+                   str(output_path.joinpath('affinity_predictor_1.png')),
+                   nn=nn_results, min_nn=min_nn)
 
     affinity_predictor_2 = generate_lasso_model(X_train, y_train,
-                                                X_test, y_test)
+                                                f_X_test, f_y_test)
 
     with open(str(output_path.joinpath('affinity_predictor_2.pkl')),
               'wb') as handle:
         pickle.dump(affinity_predictor_2, handle)
+        pickle.dump(thresholds, handle)
 
     plot_regressor(affinity_predictor_2, X_test, y_test, X_train, y_train,
                    'Lasso regression',
-                   str(output_path.joinpath('affinity_predictor_2.png')))
+                   str(output_path.joinpath('affinity_predictor_2.png')),
+                   nn=nn_results, min_nn=min_nn)
 
     affinity_predictor_3 = generate_ridge_model(X_train, y_train,
-                                                X_test, y_test)
+                                                f_X_test, f_y_test)
 
     with open(str(output_path.joinpath('affinity_predictor_3.pkl')),
               'wb') as handle:
         pickle.dump(affinity_predictor_3, handle)
+        pickle.dump(thresholds, handle)
 
     plot_regressor(affinity_predictor_3, X_test, y_test, X_train, y_train,
                    'Ridge regression',
-                   str(output_path.joinpath('affinity_predictor_3.png')))
+                   str(output_path.joinpath('affinity_predictor_3.png')),
+                   nn=nn_results, min_nn=min_nn)
 
     affinity_predictor_4 = generate_ensemble_regressor(
         [('Linear regression', affinity_predictor_1),
          ('Ridge regression', affinity_predictor_3)],
-        X_train, y_train, X_test, y_test)
+        X_train, y_train, f_X_test, f_y_test)
 
     with open(str(output_path.joinpath('affinity_predictor_4.pkl')),
               'wb') as handle:
         pickle.dump(affinity_predictor_4, handle)
+        pickle.dump(thresholds, handle)
 
     plot_regressor(affinity_predictor_4, X_test, y_test, X_train, y_train,
                    'Ensemble regression',
-                   str(output_path.joinpath('affinity_predictor_4.png')))
+                   str(output_path.joinpath('affinity_predictor_4.png')),
+                   nn=nn_results, min_nn=min_nn)
 
 
 if __name__ == "__main__":
