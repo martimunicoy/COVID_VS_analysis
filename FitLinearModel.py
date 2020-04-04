@@ -18,6 +18,7 @@ from sklearn.ensemble import VotingRegressor
 from sklearn.neighbors import KNeighborsClassifier
 from matplotlib import pyplot as plt
 import numpy as np
+from scipy.spatial.distance import cdist
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -388,6 +389,54 @@ def plot_regressor(model, X_test, y_test, X_train, y_train, title,
     plt.cla()
 
 
+def domain_analysis(X_train, y_train, names=None):
+    print(" - Computing applicability domains")
+
+    # Matrix of descriptor distances between entries
+    distances = np.array([cdist([x], X_train) for x in X_train])
+    distances_sorted = [np.sort(d[0]) for d in distances]
+
+    # Discard 0s, which are distances to the same entry (diagonal
+    # elements in the matrix)
+    distances_matrix = [d[1:] for d in distances_sorted]
+
+    # Empirical calculation of the smoothing parameter k
+    k = int(round(pow(len(X_train), 1 / 3)))
+
+    # Calculate the mean of first k distances for each sample
+    d_means = [np.mean(d[:k][0]) for d in distances_matrix]
+
+    # Calculate quartiles
+    Q1 = np.quantile(d_means, .25)
+    Q3 = np.quantile(d_means, .75)
+
+    # Calculate reference value
+    d_ref = Q3 + 1.5 * (Q3 - Q1)
+
+    # Calculate thresholds
+    Dijs = []
+    Kis = []
+    for distances in distances_matrix:
+        allowed_distances = [d for d in distances if d <= d_ref]
+        Dijs.append(allowed_distances)
+        Kis.append(len(allowed_distances))
+
+    ti = []
+    for Dij, Ki in zip(Dijs, Kis):
+        print(Dij, Ki)
+        if (Ki == 0):
+            ti.append(0)
+        else:
+            ti.append(np.sum(Dij) / Ki)
+
+    ti = np.array(ti)
+
+    # Convert 0 to minimum value not zero
+    ti[ti == 0] = min(ti[ti != 0])
+
+    return ti
+
+
 def main():
     descriptors_path, labels_path, output_path = parse_args()
 
@@ -422,7 +471,7 @@ def main():
     f_dataset['be / atoms'] = f_dataset['be'] / f_dataset['atoms']
 
     # Drop unnecessary columns
-    f_dataset.drop(['toten', 'weight', 'atoms', 'be'], axis=1, inplace=True)
+    f_dataset.drop(['toten', 'weight', 'atoms', 'be', 'clusters'], axis=1, inplace=True)
 
     # Split by activity
     f_dataset.loc[:, 'IC50'] = f_dataset.loc[:, 'IC50'].apply(pd.to_numeric)
@@ -430,12 +479,11 @@ def main():
     actives, inactives = [x for _, x in f_dataset.groupby(
         [f_dataset['IC50'] < 0])]
 
-    print(len(actives), len(inactives))
-
     # Convert activity in a boolean
     f_dataset['activity'] = f_dataset['IC50'] > 0
     f_dataset.drop(['IC50'], axis=1, inplace=True)
 
+    """
     # Split data into training and test set
     X_train, X_test, y_train, y_test = train_test_split(
         f_dataset.loc[:, ['be / atoms', 'rotamers', 'internal']].to_numpy(),
@@ -490,6 +538,7 @@ def main():
     plot_classification(activity_classifier_4, X_test, y_test,
                         "Activity ensemble classification",
                         str(output_path.joinpath('activity_classifier_4.png')))
+    """
 
     # Split data into training and test set
     X_train, X_test, y_train, y_test = train_test_split(
@@ -497,6 +546,12 @@ def main():
         actives['pIC50'].to_list(),
         train_size=0.75,
         random_state=123)
+
+    thresholds = domain_analysis(X_train, y_train)
+
+    print(thresholds)
+
+    return
 
     affinity_predictor_1 = generate_regression_model(X_train, y_train,
                                                      X_test, y_test)
