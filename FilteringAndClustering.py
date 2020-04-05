@@ -409,6 +409,14 @@ def get_ligand_rotatable_bonds(lig_rotamers_path):
     return counter
 
 
+def get_global_metric(metrics_by_PELE_id):
+    metrics = []
+    for PELE_id, m in metrics_by_PELE_id.items():
+        metrics.append(m)
+
+    return np.mean(metrics)
+
+
 def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
                   rmsd_by_PELE_id, ie_by_PELE_id, representative_PELE_id,
                   results, cluster_id,
@@ -628,6 +636,9 @@ def main():
             cluster_metrics[cluster_id] = (mean_ie, mean_rmsd, mean_te,
                                            representative_PELE_id)
 
+        global_mean_te_energy = get_global_metric(te_by_PELE_id)
+        global_mean_ie_energy = get_global_metric(ie_by_PELE_id)
+
         # Get best cluster (lowest ie) among those that tied
         for current_cluster_id, metrics in cluster_metrics.items():
             if (metrics[0] < mean_ie):
@@ -659,21 +670,25 @@ def main():
 
         with open(str(output_path.joinpath('metrics.out')), 'w') as f:
             f.write('{}    {}    {}    {}    {}    {}    {}'.format(
-                'Heavy atoms', 'Molecular weight', 'Rotatable bonds',
-                'Mean Total Energy', 'Mean Interaction Energy',
-                'Mean RMSD (respect to initial struc.)',
-                'Number of clusters') +
-                '                                {}'.format(
+                'Heavy atoms', 'Mol. weight', 'N. rot. bonds',
+                'Mean Tot. E.', 'Mean Int. E.',
+                'Mean RMSD',
+                'N. clusters') +
+                '    {}'.format('Glob. Mean Tot. E.') +
+                '    {}'.format('Glob. Mean Int. E.') +
+                '              {}'.format(
                 'PELE ID'))
             f.write('\n')
-            f.write('{:11d}    {:16.3f}    '.format(ligand_heavy_atoms,
+            f.write('{:11d}    {:11.3f}    '.format(ligand_heavy_atoms,
                                                     ligand_mass))
-            f.write('{:15d}    '.format(get_ligand_rotatable_bonds(
+            f.write('{:13d}    '.format(get_ligand_rotatable_bonds(
                 lig_rotamers_path)))
-            f.write('{: 17.1f}    {: 23.1f}    {: 37.1f}    '.format(
-                mean_te, mean_ie, mean_rmsd, *representative_PELE_id))
-            f.write('{: 18d}    '.format(len(cluster_centers)))
-            f.write('Epoch:{:3d} Trajectory:{:3d} Model:{:4d}\n'.format(
+            f.write('{: 12.1f}    {: 12.1f}    {: 9.1f}    '.format(
+                mean_te, mean_ie, mean_rmsd))
+            f.write('{: 10d}    '.format(len(cluster_centers)))
+            f.write('{: 18.1f}    '.format(global_mean_te_energy))
+            f.write('{: 18.1f}    '.format(global_mean_ie_energy))
+            f.write('E:{:3d} T:{:3d} M:{:4d}\n'.format(
                 *representative_PELE_id))
 
         rep_traj = md.load(str(PELE_sim_path.joinpath(
