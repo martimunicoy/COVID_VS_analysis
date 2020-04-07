@@ -342,23 +342,59 @@ def calculate_probabilities(cluster_results):
     return p_dict
 
 
-def get_most_populated_cluster(p_dict, cluster_centers_array):
+def get_most_populated_clusters(p_dict, cluster_centers_array):
     ordered_clusters = sorted(p_dict.items(), key=itemgetter(1),
                               reverse=True)
-    highest_population = ordered_clusters[0][1]
+
+    # Prevent filtering all clusters out in case were small densities are found
+    population_threshold = min((0.25, ordered_clusters[0][1]))
+
+    print(' - Selecting clusters with density higher than {:.2f}'.format(
+        population_threshold))
 
     # Allow to count all clusters if there is a draw
     selected_clusters = []
     for c, p in sorted(p_dict.items(), key=itemgetter(1),
                        reverse=True):
-        if (p == highest_population):
+        if (p >= population_threshold):
             selected_clusters.append(c)
 
     selected_centers = []
     for c in selected_clusters:
         selected_centers.append(cluster_centers_array[c])
 
+    print('   - Number of selected clusters: {}'.format(
+        len(selected_clusters)))
+
     return selected_clusters, selected_centers
+
+
+def get_best_cluster(cluster_ids, selected_centers, results, filtered_PELE_ids,
+                     ie_by_PELE_id, rmsd_by_PELE_id, te_by_PELE_id, lig_coords,
+                     representative_extraction_method):
+    cluster_metrics = {}
+    for cluster_id, center in zip(cluster_ids, selected_centers):
+        ies, rmsds, tes, representative_PELE_id = \
+            get_metrics_from_cluster(cluster_id, results,
+                                     filtered_PELE_ids, ie_by_PELE_id,
+                                     rmsd_by_PELE_id, te_by_PELE_id,
+                                     lig_coords, center,
+                                     representative_extraction_method)
+        cluster_metrics[cluster_id] = (ies, rmsds, tes, representative_PELE_id)
+
+    if (len(cluster_ids) == 1):
+        return ies, rmsds, tes, representative_PELE_id
+
+    mean_ie = np.mean(ies)
+    for current_cluster_id, metrics in cluster_metrics.items():
+        if (np.mean(metrics[0]) < mean_ie):
+            cluster_id = current_cluster_id
+            ies, rmsds, tes, representative_PELE_id = metrics
+
+    print('   - Selected cluster {} (lowest mean interaction energy)'.format(
+        cluster_id))
+
+    return cluster_id, ies, rmsds, tes, representative_PELE_id
 
 
 def get_metrics_from_cluster(cluster_id, results, PELE_ids,
@@ -396,7 +432,7 @@ def get_metrics_from_cluster(cluster_id, results, PELE_ids,
                     best_metric = te_by_PELE_id[PELE_id]
                     best_id = PELE_id
 
-    return np.mean(ies), np.mean(rmsds), np.mean(tes), best_id
+    return ies, rmsds, tes, best_id
 
 
 def get_ligand_rotatable_bonds(lig_rotamers_path):
@@ -622,33 +658,16 @@ def main():
         for c, f in sorted(p_dict.items(), key=itemgetter(0)):
             print('   - {:3d}: {:3.2f}'.format(c, f))
 
-        cluster_ids, selected_centers = get_most_populated_cluster(
+        cluster_ids, selected_centers = get_most_populated_clusters(
             p_dict, cluster_centers)
 
-        cluster_metrics = {}
-        for cluster_id, center in zip(cluster_ids, selected_centers):
-            mean_ie, mean_rmsd, mean_te, representative_PELE_id = \
-                get_metrics_from_cluster(cluster_id, results,
-                                         filtered_PELE_ids_2, ie_by_PELE_id,
-                                         rmsd_by_PELE_id, te_by_PELE_id,
-                                         lig_coords, center,
-                                         representative_extraction_method)
-            cluster_metrics[cluster_id] = (mean_ie, mean_rmsd, mean_te,
-                                           representative_PELE_id)
+        cluster_id, ies, rmsds, tes, representative_PELE_id = get_best_cluster(
+            cluster_ids, selected_centers, results,
+            filtered_PELE_ids_2, ie_by_PELE_id, rmsd_by_PELE_id,
+            te_by_PELE_id, lig_coords, representative_extraction_method)
 
         global_mean_te_energy = get_global_metric(te_by_PELE_id)
         global_mean_ie_energy = get_global_metric(ie_by_PELE_id)
-
-        # Get best cluster (lowest ie) among those that tied
-        for current_cluster_id, metrics in cluster_metrics.items():
-            if (metrics[0] < mean_ie):
-                cluster_id = current_cluster_id
-                mean_ie, mean_rmsd, mean_te, representative_PELE_id = metrics
-
-        if (len(cluster_metrics) > 1):
-            print(' - Two or more clusters have same frequencies')
-            print('   - Cluster {} was selected as '.format(cluster_id) +
-                  'it has the lowest mean interaction energy')
 
         output_path = PELE_sim_path.joinpath(output_relative_path)
 
@@ -659,37 +678,49 @@ def main():
         print('   - Number of clusters:      {:25d}'.format(
             len(cluster_centers)))
         print('   - Selected cluster:        {:25d}'.format(cluster_id))
-        print('   - Mean total energy:       {:25.1f}'.format(mean_te))
-        print('   - Mean interaction energy: {:25.1f}'.format(mean_ie))
+        print('   - Mean total energy:       {:25.1f}'.format(np.mean(tes)))
+        print('   - Mean interaction energy: {:25.1f}'.format(np.mean(ies)))
         print('   - Mean RMSD (respect to initial structure): ' +
-              '{:8.1f}'.format(mean_rmsd))
+              '{:8.1f}'.format(np.mean(rmsds)))
+        print('   - Min total energy:        {:25.1f}'.format(np.min(tes)))
+        print('   - Min interaction energy:  {:25.1f}'.format(np.min(ies)))
+        print('   - Min RMSD (respect to initial structure):  ' +
+              '{:8.1f}'.format(np.min(rmsds)))
+        print('   - Max total energy:        {:25.1f}'.format(np.max(tes)))
+        print('   - Max interaction energy:  {:25.1f}'.format(np.max(ies)))
+        print('   - Max RMSD (respect to initial structure):  ' +
+              '{:8.1f}'.format(np.max(rmsds)))
         print('   - Representative structure: ' +
               'epoch: {}, '.format(representative_PELE_id[0]) +
               'trajectory: {}, '.format(representative_PELE_id[1]) +
               'model: {}'.format(representative_PELE_id[2]))
 
         with open(str(output_path.joinpath('metrics.out')), 'w') as f:
-            f.write('{}    {}    {}    {}    {}    {}    {}'.format(
-                'Heavy atoms', 'Mol. weight', 'N. rot. bonds',
-                'Mean Tot. E.', 'Mean Int. E.',
-                'Mean RMSD',
-                'N. clusters') +
-                '    {}'.format('Glob. Mean Tot. E.') +
-                '    {}'.format('Glob. Mean Int. E.') +
-                '              {}'.format(
-                'PELE ID'))
-            f.write('\n')
-            f.write('{:11d}    {:11.3f}    '.format(ligand_heavy_atoms,
-                                                    ligand_mass))
-            f.write('{:13d}    '.format(get_ligand_rotatable_bonds(
-                lig_rotamers_path)))
-            f.write('{: 12.1f}    {: 12.1f}    {: 9.1f}    '.format(
-                mean_te, mean_ie, mean_rmsd))
-            f.write('{: 10d}    '.format(len(cluster_centers)))
-            f.write('{: 18.1f}    '.format(global_mean_te_energy))
-            f.write('{: 18.1f}    '.format(global_mean_ie_energy))
-            f.write('E:{:3d} T:{:3d} M:{:4d}\n'.format(
-                *representative_PELE_id))
+            f.write('{:19}: {:10d}\n'.format(
+                'Heavy atoms', ligand_heavy_atoms))
+            f.write('{:19}: {:10.3f}\n'.format(
+                'Molecular weight', ligand_mass))
+            f.write('{:19}: {:10d}\n'.format(
+                'N. rotatable bonds',
+                get_ligand_rotatable_bonds(lig_rotamers_path)))
+            f.write('{:19}: {:10d}\n'.format(
+                'N. clusters', len(cluster_centers)))
+            f.write('{:19}: {: 10.1f}\n'.format(
+                'Global Mean Tot. E.', global_mean_te_energy))
+            f.write('{:19}: {: 10.1f}\n'.format(
+                'Global Mean Int. E.', global_mean_ie_energy))
+
+        with open(str(output_path.joinpath('cluster.out')), 'w') as f:
+            f.write('{:12s}: {: 10d}\n'.format('Cluster size', len(tes)))
+            f.write('{:12s}: {: 10.1f}\n'.format('Mean Tot. E.', np.mean(tes)))
+            f.write('{:12s}: {: 10.1f}\n'.format('Mean Int. E.', np.mean(ies)))
+            f.write('{:12s}: {: 10.1f}\n'.format('Mean RMSD', np.mean(rmsds)))
+            f.write('{:12s}: {: 10.1f}\n'.format('Min Tot. E.', np.min(tes)))
+            f.write('{:12s}: {: 10.1f}\n'.format('Min Int. E.', np.min(ies)))
+            f.write('{:12s}: {: 10.1f}\n'.format('Min RMSD', np.min(rmsds)))
+            f.write('{:12s}: {: 10.1f}\n'.format('Max Tot. E.', np.max(tes)))
+            f.write('{:12s}: {: 10.1f}\n'.format('Max Int. E.', np.max(ies)))
+            f.write('{:12s}: {: 10.1f}\n'.format('Max RMSD', np.max(rmsds)))
 
         rep_traj = md.load(str(PELE_sim_path.joinpath(
             'output/{}/trajectory_{}.xtc'.format(
