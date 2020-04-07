@@ -383,7 +383,7 @@ def get_best_cluster(cluster_ids, selected_centers, results, filtered_PELE_ids,
         cluster_metrics[cluster_id] = (ies, rmsds, tes, representative_PELE_id)
 
     if (len(cluster_ids) == 1):
-        return ies, rmsds, tes, representative_PELE_id
+        return cluster_id, ies, rmsds, tes, representative_PELE_id
 
     mean_ie = np.mean(ies)
     for current_cluster_id, metrics in cluster_metrics.items():
