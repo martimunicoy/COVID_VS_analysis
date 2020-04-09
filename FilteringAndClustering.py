@@ -111,6 +111,11 @@ def parse_args():
                         " be selected by minimizing the interaction energy, " +
                         "the total energy or by considering the one that is " +
                         "closer to the center of the cluster.")
+    parser.add_argument("--maximum_cluster_density_threshold",
+                        metavar="B", type=float, default='0.25',
+                        help="Maximum cluster density threshold that is used" +
+                        " to filter out low populated clusters in the final" +
+                        " selection stage.")
 
     parser.set_defaults(generate_plots=False)
 
@@ -121,7 +126,8 @@ def parse_args():
         args.topology_path, args.report_name, args.hbonds_path, \
         args.golden_hbonds_1, args.golden_hbonds_2, \
         args.minimum_g2_conditions, args.output_path, args.generate_plots, \
-        args.representative_extraction_method
+        args.representative_extraction_method, \
+        args.maximum_cluster_density_threshold
 
 
 def prepare_golden_dict(golden_hbonds):
@@ -342,12 +348,14 @@ def calculate_probabilities(cluster_results):
     return p_dict
 
 
-def get_most_populated_clusters(p_dict, cluster_centers_array):
+def get_most_populated_clusters(p_dict, cluster_centers_array,
+                                maximum_cluster_density_threshold):
     ordered_clusters = sorted(p_dict.items(), key=itemgetter(1),
                               reverse=True)
 
     # Prevent filtering all clusters out in case were small densities are found
-    population_threshold = min((0.25, ordered_clusters[0][1]))
+    population_threshold = min((maximum_cluster_density_threshold,
+                                ordered_clusters[0][1]))
 
     print(' - Selecting clusters with density higher than {:.2f}'.format(
         population_threshold))
@@ -454,9 +462,9 @@ def get_global_metric(metrics_by_PELE_id):
 
 
 def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
-                  rmsd_by_PELE_id, ie_by_PELE_id, representative_PELE_id,
+                  rmsd_by_PELE_id, energy_by_PELE_id, representative_PELE_id,
                   results, cluster_id,
-                  output_path):
+                  output_path, energy_label):
     fig = plt.figure()
     ax = plt.subplot(111)
 
@@ -465,8 +473,10 @@ def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
     for PELE_id in zip(*PELE_ids):
         if (PELE_id in filtered_PELE_ids_1):
             continue
+        if (PELE_id[2] == 0):
+            continue
         x.append(rmsd_by_PELE_id[PELE_id])
-        y.append(ie_by_PELE_id[PELE_id])
+        y.append(energy_by_PELE_id[PELE_id])
 
     h1 = plt.scatter(x, y, color='grey', alpha=0.5, label='All')
 
@@ -475,8 +485,10 @@ def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
     for PELE_id in filtered_PELE_ids_1:
         if (PELE_id in filtered_PELE_ids_2):
             continue
+        if (PELE_id[2] == 0):
+            continue
         x.append(rmsd_by_PELE_id[PELE_id])
-        y.append(ie_by_PELE_id[PELE_id])
+        y.append(energy_by_PELE_id[PELE_id])
 
     h2 = plt.scatter(x, y, color='red', alpha=0.5,
                      label='H bond filter')
@@ -486,8 +498,10 @@ def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
     for r, PELE_id in zip(results, filtered_PELE_ids_2):
         if (r == cluster_id):
             continue
+        if (PELE_id[2] == 0):
+            continue
         x.append(rmsd_by_PELE_id[PELE_id])
-        y.append(ie_by_PELE_id[PELE_id])
+        y.append(energy_by_PELE_id[PELE_id])
 
     h3 = plt.scatter(x, y, color='green', alpha=0.5,
                      label='Energetic filter')
@@ -499,24 +513,27 @@ def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
             if (PELE_id == representative_PELE_id):
                 continue
             x.append(rmsd_by_PELE_id[PELE_id])
-            y.append(ie_by_PELE_id[PELE_id])
+            y.append(energy_by_PELE_id[PELE_id])
 
     h4 = plt.scatter(x, y, color='blue', alpha=0.5,
                      label='Selected cluster')
 
     h5 = plt.scatter(rmsd_by_PELE_id[representative_PELE_id],
-                     ie_by_PELE_id[representative_PELE_id], marker='x',
+                     energy_by_PELE_id[representative_PELE_id], marker='x',
                      color='black', alpha=1, label='Representative\nstructure')
 
     plt.xlabel('RMSD to initial structure ($\AA$)', fontweight='bold')
-    plt.ylabel('Interaction energy ($kcal/mol$)', fontweight='bold')
+    plt.ylabel(energy_label + ' ($kcal/mol$)', fontweight='bold')
 
     box = ax.get_position()
     ax.set_position([box.x0, box.y0, box.width * 0.75, box.height])
     plt.legend([h1, h2, h3, h4, h5])
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
-    plt.savefig(str(output_path.joinpath('plot.png')))
+    plt.subplots_adjust(left=0.15, right=0.70)
+
+    plt.savefig(str(output_path.joinpath(
+        energy_label.lower().replace(' ', '_') + '_plot.png')))
 
 
 def main():
@@ -525,7 +542,8 @@ def main():
         ie_col, rmsd_col, topology_relative_path, report_name, \
         hbonds_relative_path, golden_hbonds_1, golden_hbonds_2, \
         minimum_g2_conditions, output_relative_path, generate_plots, \
-        representative_extraction_method = parse_args()
+        representative_extraction_method, maximum_cluster_density_threshold = \
+        parse_args()
 
     golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
     golden_hbonds_2 = prepare_golden_dict(golden_hbonds_2)
@@ -654,12 +672,12 @@ def main():
         p_dict = calculate_probabilities(results)
 
         print(' - Clustering resulted in {} clusters '.format(len(p_dict)) +
-              'with frequencies:')
+              'with densities:')
         for c, f in sorted(p_dict.items(), key=itemgetter(0)):
             print('   - {:3d}: {:3.2f}'.format(c, f))
 
         cluster_ids, selected_centers = get_most_populated_clusters(
-            p_dict, cluster_centers)
+            p_dict, cluster_centers, maximum_cluster_density_threshold)
 
         cluster_id, ies, rmsds, tes, representative_PELE_id = get_best_cluster(
             cluster_ids, selected_centers, results,
@@ -734,7 +752,11 @@ def main():
             generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
                           rmsd_by_PELE_id, ie_by_PELE_id,
                           representative_PELE_id, results, cluster_id,
-                          output_path)
+                          output_path, 'Interaction energy')
+            generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
+                          rmsd_by_PELE_id, te_by_PELE_id,
+                          representative_PELE_id, results, cluster_id,
+                          output_path, 'Total energy')
 
 
 if __name__ == "__main__":
