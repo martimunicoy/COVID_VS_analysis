@@ -13,6 +13,8 @@ import mdtraj as md
 # PELE imports
 from Helpers.PELEIterator import SimIt
 from Helpers import hbond_mod as hbm
+from Helpers.ReportUtils import extract_metrics
+
 
 # Script information
 __author__ = "Marti Municoy, Carles Perez"
@@ -50,20 +52,38 @@ def parse_args():
                         metavar="PATH", type=str,
                         default='hbonds.out',
                         help="Relative path to output file")
-    parser.add_argument("-of", "--out_folder_name",
-                        metavar="PATH", type=str,
-                        default='output',
-                        help="Adaptive's output folder name.")
+    parser.add_argument("--PELE_output_path",
+                        metavar="PATH", type=str, default='output',
+                        help="Relative path to PELE output folder")
+    parser.add_argument("-r", "--report_name",
+                        metavar="NAME", type=str,
+                        default='report',
+                        help="PELE report name")
+    parser.add_argument('--include_rejected_steps',
+                        dest='include_rejected_steps',
+                        action='store_true')
+
+    parser.set_defaults(include_rejected_steps=False)
 
     args = parser.parse_args()
 
     return args.sim_paths, args.ligand_resname, args.distance, args.angle, \
         args.pseudo_hb, args.processors_number, args.topology_path, \
-        args.output_path, args.out_folder_name
+        args.output_path, args.report_name, args.PELE_output_path, \
+        args.include_rejected_steps
+
+
+def account_for_ignored_hbonds(hbonds_in_traj, accepted_steps):
+    new_hbonds_in_traj = {}
+    for i, s in enumerate(accepted_steps):
+        new_hbonds_in_traj[i] = hbonds_in_traj[s]
+
+    return new_hbonds_in_traj
 
 
 def find_hbonds_in_trajectory(lig_resname, distance, angle, pseudo,
-                              topology_path, chain_ids, traj_path):
+                              topology_path, chain_ids, report_name,
+                              include_rejected_steps, traj_path):
     try:
         traj = md.load_xtc(str(traj_path), top=str(topology_path))
     except OSError:
@@ -74,6 +94,21 @@ def find_hbonds_in_trajectory(lig_resname, distance, angle, pseudo,
     lig = traj.topology.select('resname {}'.format(lig_resname))
     hbonds_in_traj = find_ligand_hbonds(traj, lig, distance, angle, pseudo,
                                         chain_ids)
+
+    if (include_rejected_steps):
+        # Recover corresponding report
+        num = int(''.join(filter(str.isdigit, traj_path.name)))
+        path = traj_path.parent
+        report_path = path.joinpath(report_name + '_{}'.format(num))
+
+        metrics = extract_metrics((report_path, ), (3, ))[0]
+
+        accepted_steps = []
+        for m in metrics:
+            accepted_steps.append(int(m[0]))
+
+        hbonds_in_traj = account_for_ignored_hbonds(hbonds_in_traj,
+                                                    accepted_steps)
 
     return hbonds_in_traj
 
@@ -112,7 +147,8 @@ def find_hbond_in_snapshot(traj, model_id, lig, distance, angle, pseudo,
 def main():
     # Parse args
     PELE_sim_paths, lig_resname, distance, angle, pseudo_hb, proc_number, \
-        topology_relative_path, output_path, out_folder_name = parse_args()
+        topology_relative_path, output_path, report_name, PELE_output_path,  \
+        include_rejected_steps = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -143,10 +179,11 @@ def main():
 
         parallel_function = partial(find_hbonds_in_trajectory, lig_resname,
                                     distance, angle, pseudo_hb, topology_path,
-                                    chain_ids)
+                                    chain_ids, report_name,
+                                    include_rejected_steps)
 
         sim_it = SimIt(PELE_sim_path)
-        sim_it.build_traj_it(out_folder_name, 'trajectory', 'xtc')
+        sim_it.build_traj_it(PELE_output_path, 'trajectory', 'xtc')
 
         trajectories = [traj for traj in sim_it.traj_it]
         with Pool(proc_number) as pool:
