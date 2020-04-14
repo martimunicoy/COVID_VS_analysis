@@ -2,26 +2,11 @@
 
 
 # Standard imports
-import os
 import argparse as ap
-from multiprocessing import Pool
-from functools import partial
 from collections import defaultdict
-from operator import itemgetter
-
-# External imports
-import mdtraj as md
-import numpy as np
-from sklearn.cluster import MeanShift
-import matplotlib as mpl
-mpl.use('Agg')
-from matplotlib import pyplot as plt
 
 # PELE imports
 from Helpers.PELEIterator import SimIt
-from Helpers.ReportUtils import extract_PELE_ids
-from Helpers.ReportUtils import extract_metrics
-from Helpers.ReportUtils import get_metric_by_PELE_id
 
 
 # Script information
@@ -37,10 +22,6 @@ def parse_args():
     parser.add_argument("traj_paths", metavar="PATH", type=str,
                         nargs='*',
                         help="Path to PELE trajectory files")
-
-    parser.add_argument("-n", "--processors_number",
-                        metavar="N", type=int, default=None,
-                        help="Number of processors")
 
     parser.add_argument("--hbonds_path",
                         metavar="PATH", type=str,
@@ -73,9 +54,8 @@ def parse_args():
 
     args = parser.parse_args()
 
-    return args.traj_paths, args.processors_number, args.hbonds_path, \
-        args.golden_hbonds_1, args.golden_hbonds_2, \
-        args.minimum_g2_conditions, args.output_path
+    return args.traj_paths, args.hbonds_path, args.golden_hbonds_1, \
+        args.golden_hbonds_2, args.minimum_g2_conditions, args.output_path
 
 
 def prepare_golden_dict(golden_hbonds):
@@ -158,10 +138,8 @@ def hbond_fulfillment(hbonds, golden_hbonds_1, golden_hbonds_2,
 
 def main():
     # Parse args
-    PELE_sim_paths, proc_number, hbonds_relative_path, \
-        golden_hbonds_1, golden_hbonds_2, \
-        minimum_g2_conditions, output_path = \
-        parse_args()
+    PELE_sim_paths, hbonds_relative_path, golden_hbonds_1, golden_hbonds_2, \
+        minimum_g2_conditions, output_path = parse_args()
 
     golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
     golden_hbonds_2 = prepare_golden_dict(golden_hbonds_2)
