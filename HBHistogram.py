@@ -353,7 +353,7 @@ def main():
                                               trajectories_to_ignore,
                                               models_to_ignore)
 
-        output_path = Path(str(Path(hb_path).parent) + relative_output_path)
+        output_path = Path(hb_path).parent.joinpath(relative_output_path)
 
         if (mode == "count"):
             counter = count(hbond_atoms)
