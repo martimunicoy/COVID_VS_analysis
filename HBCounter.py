@@ -52,6 +52,9 @@ def parse_args():
                         metavar="PATH", type=str,
                         default='hbonds.out',
                         help="Relative path to output file")
+    parser.add_argument("--PELE_output_path",
+                        metavar="PATH", type=str, default='output',
+                        help="Relative path to PELE output folder")
     parser.add_argument("-r", "--report_name",
                         metavar="NAME", type=str,
                         default='report',
@@ -66,7 +69,8 @@ def parse_args():
 
     return args.sim_paths, args.ligand_resname, args.distance, args.angle, \
         args.pseudo_hb, args.processors_number, args.topology_path, \
-        args.output_path, args.report_name, args.include_rejected_steps
+        args.output_path, args.report_name, args.PELE_output_path, \
+        args.include_rejected_steps
 
 
 def account_for_ignored_hbonds(hbonds_in_traj, accepted_steps):
@@ -143,7 +147,7 @@ def find_hbond_in_snapshot(traj, model_id, lig, distance, angle, pseudo,
 def main():
     # Parse args
     PELE_sim_paths, lig_resname, distance, angle, pseudo_hb, proc_number, \
-        topology_relative_path, output_path, report_name, \
+        topology_relative_path, output_path, report_name, PELE_output_path,  \
         include_rejected_steps = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
@@ -179,7 +183,7 @@ def main():
                                     include_rejected_steps)
 
         sim_it = SimIt(PELE_sim_path)
-        sim_it.build_traj_it('output', 'trajectory', 'xtc')
+        sim_it.build_traj_it(PELE_output_path, 'trajectory', 'xtc')
 
         trajectories = [traj for traj in sim_it.traj_it]
         with Pool(proc_number) as pool:
