@@ -42,7 +42,10 @@ def p_extract_metrics(cols, report_path):
     return results
 
 
-def extract_metrics(reports, cols, proc_number):
+def extract_metrics(reports, cols, proc_number=None):
+    if (proc_number is None):
+        return [p_extract_metrics(cols, reports[0]), ]
+
     parallel_function = partial(p_extract_metrics, cols)
 
     with Pool(proc_number) as pool:
