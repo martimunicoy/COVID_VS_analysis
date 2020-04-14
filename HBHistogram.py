@@ -334,7 +334,7 @@ def generate_barplot(dictionary, mode, lim, output_path):
 
 def main():
     hb_paths, mode, lim, epochs_to_ignore, trajectories_to_ignore, \
-        models_to_ignore, output_path, proc_number, \
+        models_to_ignore, relative_output_path, proc_number, \
         PELE_output_path, PELE_report_name = parse_args()
 
     hb_paths_list = []
@@ -352,6 +352,8 @@ def main():
                                               epochs_to_ignore,
                                               trajectories_to_ignore,
                                               models_to_ignore)
+
+        output_path = Path(str(hb_path.parent) + relative_output_path)
 
         if (mode == "count"):
             counter = count(hbond_atoms)
