@@ -184,8 +184,8 @@ def main():
                                                          golden_hbonds_2,
                                                          minimum_g2_conditions)
 
-        if (total_fulfillments == 0):
-            print(' - Skipping simulation because no H bonds were found')
+        if (total_models == 0):
+            print(' - Skipping simulation because no models were found')
             continue
 
         ratio = total_fulfillments / total_models
@@ -194,23 +194,23 @@ def main():
         print('   - Total models:              {:10d}'.format(total_models))
         print('   - Total H bond fulfillments: {:10d}'.format(
             total_fulfillments))
-        print('   - Fulfillment ratio:         {:10.2f}'.format(ratio))
+        print('   - Fulfillment ratio:         {:10.4f}'.format(ratio))
         if (len(golden_hbonds_1) > 0):
             print('   - Fulfillments ratio by g1 hbond:')
         for (chain, residue), atoms in golden_hbonds_1.items():
-            print('     - {}:{}:{}: {:.3f}'.format(
+            print('     - {}:{}:{}: {:.4f}'.format(
                 chain, residue, atoms,
                 fulfillments_by_g1_hbond.get(
                     (chain, residue, tuple(atoms)), 0) / total_models))
         if (len(golden_hbonds_2) > 0):
             print('   - Fulfillments ratio by g2 hbond:')
         for (chain, residue), atoms in golden_hbonds_2.items():
-            print('     - {}:{}:{}: {:.3f}'.format(
+            print('     - {}:{}:{}: {:.4f}'.format(
                 chain, residue, ','.join(atoms),
                 fulfillments_by_g2_hbond.get(
                     (chain, residue, tuple(atoms)), 0) / total_models))
 
-        with open(str(output_path), 'w') as f:
+        with open(str(PELE_sim_path.joinpath(output_path)), 'w') as f:
             f.write('models;fulfillments;ratio')
             for (chain, residue), atoms in golden_hbonds_1.items():
                 f.write(';{}:{}:{}'.format(chain, residue, ','.join(atoms)))
@@ -218,13 +218,13 @@ def main():
                 f.write(';{}:{}:{}'.format(chain, residue, ','.join(atoms)))
             f.write('\n')
 
-            f.write('{};{};{:.3f}'.format(total_models, total_fulfillments,
+            f.write('{};{};{:.4f}'.format(total_models, total_fulfillments,
                                           ratio))
             for (chain, residue), atoms in golden_hbonds_1.items():
-                f.write(';{:.3f}'.format(fulfillments_by_g1_hbond.get(
+                f.write(';{:.4f}'.format(fulfillments_by_g1_hbond.get(
                     (chain, residue, tuple(atoms)), 0) / total_models))
             for (chain, residue), atoms in golden_hbonds_2.items():
-                f.write(';{:.3f}'.format(fulfillments_by_g2_hbond.get(
+                f.write(';{:.4f}'.format(fulfillments_by_g2_hbond.get(
                     (chain, residue, tuple(atoms)), 0) / total_models))
 
 
