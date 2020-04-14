@@ -50,12 +50,16 @@ def parse_args():
                         metavar="PATH", type=str,
                         default='hbonds.out',
                         help="Relative path to output file")
+    parser.add_argument("-of", "--out_folder_name",
+                        metavar="PATH", type=str,
+                        default='output',
+                        help="Adaptive's output folder name.")
 
     args = parser.parse_args()
 
     return args.sim_paths, args.ligand_resname, args.distance, args.angle, \
         args.pseudo_hb, args.processors_number, args.topology_path, \
-        args.output_path
+        args.output_path, args.out_folder_name
 
 
 def find_hbonds_in_trajectory(lig_resname, distance, angle, pseudo,
@@ -108,7 +112,7 @@ def find_hbond_in_snapshot(traj, model_id, lig, distance, angle, pseudo,
 def main():
     # Parse args
     PELE_sim_paths, lig_resname, distance, angle, pseudo_hb, proc_number, \
-        topology_relative_path, output_path = parse_args()
+        topology_relative_path, output_path, out_folder_name = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -142,7 +146,7 @@ def main():
                                     chain_ids)
 
         sim_it = SimIt(PELE_sim_path)
-        sim_it.build_traj_it('output', 'trajectory', 'xtc')
+        sim_it.build_traj_it(out_folder_name, 'trajectory', 'xtc')
 
         trajectories = [traj for traj in sim_it.traj_it]
         with Pool(proc_number) as pool:
