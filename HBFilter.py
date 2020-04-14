@@ -184,8 +184,8 @@ def main():
                                                          golden_hbonds_2,
                                                          minimum_g2_conditions)
 
-        if (total_fulfillments == 0):
-            print(' - Skipping simulation because no H bonds were found')
+        if (total_models == 0):
+            print(' - Skipping simulation because no models were found')
             continue
 
         ratio = total_fulfillments / total_models
@@ -210,7 +210,7 @@ def main():
                 fulfillments_by_g2_hbond.get(
                     (chain, residue, tuple(atoms)), 0) / total_models))
 
-        with open(str(output_path), 'w') as f:
+        with open(str(PELE_sim_path.joinpath(output_path)), 'w') as f:
             f.write('models;fulfillments;ratio')
             for (chain, residue), atoms in golden_hbonds_1.items():
                 f.write(';{}:{}:{}'.format(chain, residue, ','.join(atoms)))
