@@ -215,7 +215,7 @@ def main():
                     (chain, residue, tuple(atoms)), 0) / total_models))
 
         with open(str(PELE_sim_path.joinpath(output_path)), 'w') as f:
-            f.write('donors;accetors;models;fulfillments;ratio')
+            f.write('donors;acceptors;models;fulfillments;ratio')
             for (chain, residue), atoms in golden_hbonds_1.items():
                 f.write(';{}:{}:{}'.format(chain, residue, ','.join(atoms)))
             for (chain, residue), atoms in golden_hbonds_2.items():
