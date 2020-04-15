@@ -77,9 +77,11 @@ def extract_hbonds(hbonds_path):
     hbonds = defaultdict(list)
 
     with open(str(hbonds_path), 'r') as file:
-        # Skip two header lines
+        # Skip four header lines
         file.readline()
         file.readline()
+        n_donors = file.readline().split()[0]
+        n_acceptors = file.readline().split()[0]
 
         # Extra hbonds and construct dict
         for line in file:
@@ -94,7 +96,7 @@ def extract_hbonds(hbonds_path):
                 pass
             hbonds[(epoch, trajectory, model)] = tuple(_hbonds)
 
-    return hbonds
+    return hbonds, n_donors, n_acceptors
 
 
 def hbond_fulfillment(hbonds, golden_hbonds_1, golden_hbonds_2,
@@ -170,7 +172,7 @@ def main():
                   'missing')
             continue
 
-        hbonds = extract_hbonds(hbonds_path)
+        hbonds, n_donors, n_acceptors = extract_hbonds(hbonds_path)
 
         print(' - Detected {} sets of H bonds'.format(len(hbonds)))
 
@@ -191,6 +193,8 @@ def main():
         ratio = total_fulfillments / total_models
 
         print(' - Results:')
+        print('   - Ligand donors:             {:10d}'.format(n_donors))
+        print('   - Ligand acceptors:          {:10d}'.format(n_acceptors))
         print('   - Total models:              {:10d}'.format(total_models))
         print('   - Total H bond fulfillments: {:10d}'.format(
             total_fulfillments))
@@ -211,13 +215,14 @@ def main():
                     (chain, residue, tuple(atoms)), 0) / total_models))
 
         with open(str(PELE_sim_path.joinpath(output_path)), 'w') as f:
-            f.write('models;fulfillments;ratio')
+            f.write('donors;accetors;models;fulfillments;ratio')
             for (chain, residue), atoms in golden_hbonds_1.items():
                 f.write(';{}:{}:{}'.format(chain, residue, ','.join(atoms)))
             for (chain, residue), atoms in golden_hbonds_2.items():
                 f.write(';{}:{}:{}'.format(chain, residue, ','.join(atoms)))
             f.write('\n')
 
+            f.write('{};{};'.format(n_donors, n_acceptors))
             f.write('{};{};{:.4f}'.format(total_models, total_fulfillments,
                                           ratio))
             for (chain, residue), atoms in golden_hbonds_1.items():
