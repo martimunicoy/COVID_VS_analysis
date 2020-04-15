@@ -207,7 +207,7 @@ def main():
         for r, d, a in results:
             counter += len(r.values())
 
-        print('     - {} H bonds were found'.format(counter))
+        print('     - {} models were found'.format(counter))
 
         donors = set()
         acceptors = set()
