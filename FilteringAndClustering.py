@@ -178,7 +178,9 @@ def extract_hbonds(hbonds_path):
     hbonds = defaultdict(list)
 
     with open(str(hbonds_path), 'r') as file:
-        # Skip two header lines
+        # Skip four header lines
+        file.readline()
+        file.readline()
         file.readline()
         file.readline()
 

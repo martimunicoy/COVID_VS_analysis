@@ -92,8 +92,9 @@ def find_hbonds_in_trajectory(lig_resname, distance, angle, pseudo,
         return {}
 
     lig = traj.topology.select('resname {}'.format(lig_resname))
-    hbonds_in_traj = find_ligand_hbonds(traj, lig, distance, angle, pseudo,
-                                        chain_ids)
+    hbonds_in_traj, donors, acceptors = find_ligand_hbonds(traj, lig, distance,
+                                                           angle, pseudo,
+                                                           chain_ids)
 
     if (include_rejected_steps):
         # Recover corresponding report
@@ -110,17 +111,23 @@ def find_hbonds_in_trajectory(lig_resname, distance, angle, pseudo,
         hbonds_in_traj = account_for_ignored_hbonds(hbonds_in_traj,
                                                     accepted_steps)
 
-    return hbonds_in_traj
+    return hbonds_in_traj, donors, acceptors
 
 
 def find_ligand_hbonds(traj, lig, distance, angle, pseudo, chain_ids):
     hbonds_dict = {}
+    donors = set()
+    acceptors = set()
     for model_id in range(0, traj.n_frames):
-        results = find_hbond_in_snapshot(traj, model_id, lig, distance, angle,
-                                         pseudo, chain_ids)
+        results, _donors, _acceptors = find_hbond_in_snapshot(
+            traj, model_id, lig, distance, angle, pseudo, chain_ids)
         hbonds_dict[model_id] = results
+        for d in _donors:
+            donors.add(d)
+        for a in _acceptors:
+            acceptors.add(a)
 
-    return hbonds_dict
+    return hbonds_dict, donors, acceptors
 
 
 def find_hbond_in_snapshot(traj, model_id, lig, distance, angle, pseudo,
@@ -129,7 +136,13 @@ def find_hbond_in_snapshot(traj, model_id, lig, distance, angle, pseudo,
                                angle=angle, pseudo=pseudo)
 
     results = []
+    donors = set()
+    acceptors = set()
     for hbond in hbonds:
+        if (hbond[0] in lig):
+            donors.add(traj.topology.atom(hbond[0]))
+        elif (hbond[2] in lig):
+            acceptors.add(traj.topology.atom(hbond[2]))
         if (any(atom in lig for atom in hbond) and not
                 all(atom in hbond for atom in lig)):
             for atom in hbond:
@@ -141,7 +154,7 @@ def find_hbond_in_snapshot(traj, model_id, lig, distance, angle, pseudo,
                         _atom.name))
                     break
 
-    return results
+    return results, donors, acceptors
 
 
 def main():
@@ -191,17 +204,27 @@ def main():
                                trajectories)
 
         counter = 0
-        for r in results:
+        for r, d, a in results:
             counter += len(r.values())
 
         print('     - {} H bonds were found'.format(counter))
 
-        for r, t in zip(results, trajectories):
+        donors = set()
+        acceptors = set()
+        for (r, _donors, _acceptors), t in zip(results, trajectories):
             hbonds_dict[int(t.parent.name),
                         int(''.join(filter(str.isdigit, t.name)))] = r
+            for d in _donors:
+                donors.add(d)
+            for a in _acceptors:
+                acceptors.add(a)
 
         with open(str(PELE_sim_path.joinpath(output_path)), 'w') as file:
             file.write(str(PELE_sim_path.name) + '\n')
+            file.write('{} donors: {}\n'.format(len(donors),
+                                                list(donors)))
+            file.write('{} acceptors: {}\n'.format(len(acceptors),
+                                                   list(acceptors)))
             file.write('Epoch    Trajectory    Model    Hbonds' + '\n')
             for (epoch, traj_num), hbonds in hbonds_dict.items():
                 for model, hbs in hbonds.items():
