@@ -85,6 +85,12 @@ def parse_args():
 def create_df(hb_path):
     rows_df = []
     with open(hb_path) as file:
+        # Skip four header lines
+        file.readline()
+        file.readline()
+        file.readline()
+        file.readline()
+
         rows = file.readlines()
         for row in rows[2:]:
             rows_df.append(row.split())
@@ -353,7 +359,10 @@ def main():
                                               trajectories_to_ignore,
                                               models_to_ignore)
 
-        output_path = Path(hb_path).parent.joinpath(relative_output_path)
+        if (relative_output_path is not None):
+            output_path = Path(hb_path).parent.joinpath(relative_output_path)
+        else:
+            output_path = relative_output_path
 
         if (mode == "count"):
             counter = count(hbond_atoms)

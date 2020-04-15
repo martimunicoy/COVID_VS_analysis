@@ -43,7 +43,7 @@ def p_extract_metrics(cols, report_path):
 
 
 def extract_metrics(reports, cols, proc_number=None):
-    if (proc_number is None):
+    if (proc_number is None and len(reports) == 1):
         return [p_extract_metrics(cols, reports[0]), ]
 
     parallel_function = partial(p_extract_metrics, cols)
