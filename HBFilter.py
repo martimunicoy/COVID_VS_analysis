@@ -79,9 +79,9 @@ def extract_hbonds(hbonds_path):
     with open(str(hbonds_path), 'r') as file:
         # Skip four header lines
         file.readline()
-        file.readline()
         n_donors = int(file.readline().split()[0])
         n_acceptors = int(file.readline().split()[0])
+        file.readline()
 
         # Extra hbonds and construct dict
         for line in file:
