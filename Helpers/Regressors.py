@@ -229,8 +229,8 @@ def plot_linear_relations(labels, X_train, X_test, y_train, y_test,
                 max_y = y
         plt.plot((min_y, max_y), (min(xs_train), max(xs_train)), 'r--',
                  linewidth=1, label='Training correlation')
-        plt.xlabel(label)
-        plt.ylabel(y_label)
+        plt.xlabel(y_label)
+        plt.ylabel(label)
 
         if (len(xs_test > 0)):
             lin_reg = LinearRegression()
@@ -242,8 +242,8 @@ def plot_linear_relations(labels, X_train, X_test, y_train, y_test,
                     max_y = y
             plt.plot((min_y, max_y), (min(xs_test), max(xs_test)), 'b--',
                      linewidth=1, label='Test correlation')
-            plt.xlabel(label)
-            plt.ylabel(y_label)
+            plt.xlabel(y_label)
+            plt.ylabel(label)
 
             lin_reg = LinearRegression()
             lin_reg.fit(all_xs.reshape(-1, 1), all_y)
