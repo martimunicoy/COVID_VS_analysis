@@ -111,6 +111,7 @@ def parse_args():
                         " be selected by minimizing the interaction energy, " +
                         "the total energy or by considering the one that is " +
                         "closer to the center of the cluster.")
+
     parser.add_argument("--maximum_cluster_density_threshold",
                         metavar="B", type=float, default='0.25',
                         help="Maximum cluster density threshold that is used" +
