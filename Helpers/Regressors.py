@@ -216,9 +216,9 @@ def plot_linear_relations(labels, X_train, X_test, y_train, y_test,
         xs_train = np.array([X[i] for X in X_train])
         xs_test = np.array([X[i] for X in X_test])
         all_xs = np.concatenate((xs_train, xs_test))
-        plt.scatter(xs_train, y_train, c='r', label='Training set')
+        plt.scatter(y_train, xs_train, c='r', label='Training set')
         if (len(xs_test > 0)):
-            plt.scatter(xs_test, y_test, c='b', label='Test set')
+            plt.scatter(y_test, xs_test, c='b', label='Test set')
 
         lin_reg = LinearRegression()
         lin_reg.fit(xs_train.reshape(-1, 1), y_train)
@@ -227,7 +227,7 @@ def plot_linear_relations(labels, X_train, X_test, y_train, y_test,
                 min_y = y
             if (x == max(xs_train)):
                 max_y = y
-        plt.plot((min(xs_train), max(xs_train)), (min_y, max_y), 'r--',
+        plt.plot((min_y, max_y), (min(xs_train), max(xs_train)), 'r--',
                  linewidth=1, label='Training correlation')
         plt.xlabel(label)
         plt.ylabel(y_label)
@@ -240,7 +240,7 @@ def plot_linear_relations(labels, X_train, X_test, y_train, y_test,
                     min_y = y
                 if (x == max(xs_test)):
                     max_y = y
-            plt.plot((min(xs_test), max(xs_test)), (min_y, max_y), 'b--',
+            plt.plot((min_y, max_y), (min(xs_test), max(xs_test)), 'b--',
                      linewidth=1, label='Test correlation')
             plt.xlabel(label)
             plt.ylabel(y_label)
@@ -252,7 +252,7 @@ def plot_linear_relations(labels, X_train, X_test, y_train, y_test,
                     min_y = y
                 if (x == max(all_xs)):
                     max_y = y
-            plt.plot((min(all_xs), max(all_xs)), (min_y, max_y), 'k--',
+            plt.plot((min_y, max_y), (min(all_xs), max(all_xs)), 'k--',
                      linewidth=2, label='Overall correlation')
 
         plt.legend()
