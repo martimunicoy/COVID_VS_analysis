@@ -52,10 +52,15 @@ def parse_args():
     parser.add_argument("-o", "--output_path",
                         metavar="PATH", type=str, default="filter.out")
 
+    parser.add_argument("-l", "--ligand_resname",
+                        metavar="LIG", type=str, default='LIG',
+                        help="Ligand residue name")
+
     args = parser.parse_args()
 
     return args.traj_paths, args.hbonds_path, args.golden_hbonds_1, \
-        args.golden_hbonds_2, args.minimum_g2_conditions, args.output_path
+        args.golden_hbonds_2, args.minimum_g2_conditions, args.output_path, \
+        args.ligand_resname
 
 
 def prepare_golden_dict(golden_hbonds):
@@ -138,10 +143,20 @@ def hbond_fulfillment(hbonds, golden_hbonds_1, golden_hbonds_2,
         fulfillments_by_g2_hbond
 
 
+def get_ligand_rotatable_bonds(lig_rotamers_path):
+    counter = 0
+    with open(str(lig_rotamers_path), 'r') as lrl:
+        for line in lrl:
+            line = line.strip()
+            if (line.startswith('sidelib')):
+                counter += 1
+    return counter
+
+
 def main():
     # Parse args
     PELE_sim_paths, hbonds_relative_path, golden_hbonds_1, golden_hbonds_2, \
-        minimum_g2_conditions, output_path = parse_args()
+        minimum_g2_conditions, output_path, lig_resname = parse_args()
 
     golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
     golden_hbonds_2 = prepare_golden_dict(golden_hbonds_2)
@@ -166,10 +181,19 @@ def main():
         print('')
         print(' - Filtering H bonds from {}'.format(PELE_sim_path))
         hbonds_path = PELE_sim_path.joinpath(hbonds_relative_path)
+        lig_rotamers_path = PELE_sim_path.joinpath('DataLocal/' +
+                                                   'LigandRotamerLibs/' +
+                                                   '{}'.format(lig_resname) +
+                                                   '.rot.assign')
 
         if (not hbonds_path.is_file()):
             print(' - Skipping simulation because hbonds file was ' +
                   'missing')
+            continue
+
+        if (not lig_rotamers_path.is_file()):
+            print(' - Skipping simulation because ligand rotamer library was' +
+                  ' missing')
             continue
 
         hbonds, n_donors, n_acceptors = extract_hbonds(hbonds_path)
@@ -190,9 +214,11 @@ def main():
             print(' - Skipping simulation because no models were found')
             continue
 
+        n_rotamers = get_ligand_rotatable_bonds(lig_rotamers_path)
         ratio = total_fulfillments / total_models
 
         print(' - Results:')
+        print('   - Ligand rotamers:           {:10d}'.format(n_rotamers))
         print('   - Ligand donors:             {:10d}'.format(n_donors))
         print('   - Ligand acceptors:          {:10d}'.format(n_acceptors))
         print('   - Total models:              {:10d}'.format(total_models))
@@ -215,14 +241,14 @@ def main():
                     (chain, residue, tuple(atoms)), 0) / total_models))
 
         with open(str(PELE_sim_path.joinpath(output_path)), 'w') as f:
-            f.write('donors;acceptors;models;fulfillments;ratio')
+            f.write('rotamers;donors;acceptors;models;fulfillments;ratio')
             for (chain, residue), atoms in golden_hbonds_1.items():
                 f.write(';{}:{}:{}'.format(chain, residue, ','.join(atoms)))
             for (chain, residue), atoms in golden_hbonds_2.items():
                 f.write(';{}:{}:{}'.format(chain, residue, ','.join(atoms)))
             f.write('\n')
 
-            f.write('{};{};'.format(n_donors, n_acceptors))
+            f.write('{};{};{};'.format(n_rotamers, n_donors, n_acceptors))
             f.write('{};{};{:.4f}'.format(total_models, total_fulfillments,
                                           ratio))
             for (chain, residue), atoms in golden_hbonds_1.items():
