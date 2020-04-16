@@ -3,9 +3,11 @@
 
 
 # Standard imports
+import os
 import argparse as ap
 from multiprocessing import Pool
 from functools import partial
+from pathlib import Path
 
 # External imports
 import mdtraj as md
@@ -62,15 +64,19 @@ def parse_args():
     parser.add_argument('--include_rejected_steps',
                         dest='include_rejected_steps',
                         action='store_true')
+    parser.add_argument('--alternative_output_path',
+                        dest='alternative_output_path',
+                        action='store_true')
 
     parser.set_defaults(include_rejected_steps=False)
+    parser.set_defaults(alternative_output_path=False)
 
     args = parser.parse_args()
 
     return args.sim_paths, args.ligand_resname, args.distance, args.angle, \
         args.pseudo_hb, args.processors_number, args.topology_path, \
         args.output_path, args.report_name, args.PELE_output_path, \
-        args.include_rejected_steps
+        args.include_rejected_steps, args.alternative_output_path
 
 
 def account_for_ignored_hbonds(hbonds_in_traj, accepted_steps):
@@ -160,8 +166,9 @@ def find_hbond_in_snapshot(traj, model_id, lig, distance, angle, pseudo,
 def main():
     # Parse args
     PELE_sim_paths, lig_resname, distance, angle, pseudo_hb, proc_number, \
-        topology_relative_path, output_path, report_name, PELE_output_path,  \
-        include_rejected_steps = parse_args()
+        topology_relative_path, output_relative_path, report_name, \
+        PELE_output_path, include_rejected_steps, alternative_output_path = \
+        parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -219,7 +226,18 @@ def main():
             for a in _acceptors:
                 acceptors.add(a)
 
-        with open(str(PELE_sim_path.joinpath(output_path)), 'w') as file:
+        if (alternative_output_path):
+            output_path = Path('HB_counter_output')
+            output_path = output_path.joinpath(PELE_sim_path.name)
+            output_path = output_path.joinpath(output_relative_path)
+            try:
+                os.makedirs(str(output_path.parent))
+            except FileExistsError:
+                pass
+        else:
+            output_path = PELE_sim_path.joinpath(output_relative_path)
+
+        with open(str(output_path), 'w') as file:
             file.write(str(PELE_sim_path.name) + '\n')
             file.write('{} donors: {}\n'.format(len(donors),
                                                 list(donors)))
