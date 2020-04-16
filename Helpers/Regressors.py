@@ -260,7 +260,8 @@ def plot_linear_relations(labels, X_train, X_test, y_train, y_test,
         score = "r2 = {:.3f}".format(
             metrics.r2_score(all_y, lin_reg.predict(all_xs.reshape(-1, 1))))
         props = dict(boxstyle='round', facecolor='grey', alpha=0.25)
-        plt.text(min(all_xs), min_y - 0.25, score, fontsize=12,
+        plt.text(min_y + min_y * 0.1,
+                 min(all_xs) + min(all_xs) * 0.1, score, fontsize=12,
                  verticalalignment='center', bbox=props)
 
         plt.savefig(str(output_path.joinpath(
