@@ -173,8 +173,6 @@ def main():
         persistance_by_hbond, total_models = hbond_persistance(hbonds_to_track,
                                                                hbonds)
 
-        print(persistance_by_hbond)
-
         if (total_models == 0):
             print(' - Skipping simulation because no models were found')
             continue
