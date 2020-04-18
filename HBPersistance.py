@@ -187,22 +187,31 @@ def main():
         if (len(hbonds_to_track) > 0):
             print('   - Maximum persistance by H bond:')
         for (chain, residue), atoms in hbonds_to_track.items():
-            print('     - {}:{}:               {:10d}'.format(
+            print('     - {}:{}:                {:10d}'.format(
                 chain, residue,
                 max(persistance_by_hbond.get(
-                    (chain, residue, tuple(atoms)), [-1, ]))))
+                    (chain, residue, tuple(atoms)), [0, ]))))
 
         with open(str(PELE_sim_path.joinpath(output_path)), 'w') as f:
+            for (chain, residue), atoms in hbonds_to_track.items():
+                f.write('{}:{}:{};'.format(chain, residue, ','.join(atoms)))
+                f.write(';'.join(map(str, sorted(persistance_by_hbond.get(
+                    (chain, residue, tuple(atoms)), []), reverse=True))))
+                f.write('\n')
+
+        with open(str(PELE_sim_path.joinpath(
+                output_path.split('.')[0] + '_summary.out')), 'w') as f:
             f.write('rotamers;donors;acceptors;models')
             for (chain, residue), atoms in hbonds_to_track.items():
-                f.write(';{}:{}:{}'.format(chain, residue, ','.join(atoms)))
+                f.write(';maxp_{}:{}:{}'.format(
+                    chain, residue, ','.join(atoms)))
             f.write('\n')
 
             f.write('{};{};{};'.format(n_rotamers, n_donors, n_acceptors))
-            f.write('{};'.format(total_models))
+            f.write('{}'.format(total_models))
             for (chain, residue), atoms in hbonds_to_track.items():
                 f.write(';{:d}'.format(max(persistance_by_hbond.get(
-                    (chain, residue, tuple(atoms)), [-1, ]))))
+                    (chain, residue, tuple(atoms)), [0, ]))))
 
 
 if __name__ == "__main__":
