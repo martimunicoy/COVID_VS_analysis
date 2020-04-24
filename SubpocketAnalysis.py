@@ -99,6 +99,8 @@ def main():
 
     all_sim_it = SimIt(PELE_sim_paths)
 
+    data = pd.DataFrame()
+
     for PELE_sim_path in all_sim_it:
         topology_path = PELE_sim_path.joinpath(topology_relative_path)
 
@@ -140,12 +142,13 @@ def main():
             results = pool.map(parallel_function, trajectories)
 
         data = pd.concat(
+            [data, ] +
             [pd.DataFrame([r],
              columns=['simulation', 'epoch', 'trajectory', 'model'] +
-                     ["{}_centroid".format(i) for i in subpocket_names])
+                ["{}_centroid".format(i) for i in subpocket_names])
              for r in np.concatenate(results)])
 
-        data.to_csv(str(PELE_sim_path.joinpath(output_path)))
+    data.to_csv(output_path)
 
 
 if __name__ == "__main__":
