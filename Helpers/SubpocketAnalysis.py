@@ -35,6 +35,9 @@ class Residue(object):
     def res_id(self):
         return self._res_id
 
+    def __repr__(self):
+        return "{}:{}".format(self.chain_id, self.res_id)
+
 
 class ChainConverterForMDTraj(object):
     def __init__(self, path_to_trajectory):
