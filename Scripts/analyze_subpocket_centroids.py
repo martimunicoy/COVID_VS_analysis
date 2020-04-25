@@ -102,6 +102,17 @@ def main():
                 simulation.replace('.', 'simulation'), subpocket)))
             plt.close()
 
+    with open(str(out_path.joinpath('info.txt')), 'w') as f:
+        f.write(' - Subpocket results:\n')
+        for subpocket in subpockets:
+            centroid_coords = np.array(
+                data['{}_centroid'.format(subpocket)].to_list())
+            f.write('   - {}: '.format(subpocket))
+            f.write('{: 7.2f}, {: 7.2f}, {: 7.2f} '.format(
+                *np.mean(centroid_coords, axis=0)))
+            f.write('± {: 7.2f}, {: 7.2f}, {: 7.2f}\n'.format(
+                *np.std(centroid_coords, axis=0)))
+
 
 if __name__ == "__main__":
     main()
