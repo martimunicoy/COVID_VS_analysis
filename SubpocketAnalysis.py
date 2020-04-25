@@ -66,11 +66,16 @@ def parse_args():
     parser.add_argument("-o", "--output_path",
                         metavar="PATH", type=str, default="subpockets.csv")
 
+    parser.add_argument("--PELE_output_path",
+                        metavar="PATH", type=str, default='output',
+                        help="Relative path to PELE output folder")
+
     args = parser.parse_args()
 
     return args.traj_paths, args.ligand_resname, args.topology_path, \
         args.report_name, args.subpocket, args.subpocket_names, \
-        args.probe_atom_name, args.processors_number, args.output_path
+        args.probe_atom_name, args.processors_number, args.output_path, \
+        args.PELE_output_path
 
 
 def subpocket_analysis(sim_path, subpockets, topology_path, trajectory):
@@ -95,7 +100,7 @@ def main():
     # Parse args
     PELE_sim_paths, lig_resname, topology_relative_path, report_name, \
         subpockets_residues, subpocket_names, probe_atom_name, proc_number, \
-        output_path = parse_args()
+        output_path, PELE_output_path = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -120,7 +125,7 @@ def main():
             subpockets.append(Subpocket(residues))
 
         sim_it = SimIt(PELE_sim_path)
-        sim_it.build_traj_it('output', 'trajectory', 'xtc')
+        sim_it.build_traj_it(PELE_output_path, 'trajectory', 'xtc')
 
         trajectories = [traj for traj in sim_it.traj_it]
 
