@@ -5,6 +5,7 @@
 import argparse as ap
 from pathlib import Path
 import os
+import sys
 
 # External imports
 import pandas as pd
@@ -12,8 +13,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 # PELE imports
-import sys
-sys.path.append('..')
+SCRIPT_PATH = os.path.dirname(__file__)
+sys.path.append(os.path.abspath(SCRIPT_PATH + '/..'))
 from Helpers.Utils import convert_string_to_numpy_array
 
 
