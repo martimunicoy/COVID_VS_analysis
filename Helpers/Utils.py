@@ -17,3 +17,7 @@ def convert_string_to_numpy_array(string):
     string = string.strip()
     string = string.strip('[]')
     return np.array(list(map(float, string.split())))
+
+
+def squared_distances(x, y):
+    return np.dot(x - y, x - y)

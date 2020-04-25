@@ -2,13 +2,19 @@
 
 
 # Standard imports
+import os
+import sys
 import io
 from pathlib import Path
 
 # External imports
 import numpy as np
 
-# PELE imports
+# Module imports
+SCRIPT_PATH = os.path.dirname(__file__)
+sys.path.append(os.path.abspath(SCRIPT_PATH))
+from Utils import squared_distances
+
 
 # Script information
 __author__ = "Marti Municoy"
@@ -16,6 +22,10 @@ __license__ = "GPL"
 __version__ = "1.0.1"
 __maintainer__ = "Marti Municoy"
 __email__ = "marti.municoy@bsc.es"
+
+
+# Constants
+FOUR_THIRDS_PI = 4.1887902047863905
 
 
 class Residue(object):
@@ -120,14 +130,21 @@ class Point(np.ndarray):
 
 
 class Subpocket(object):
-    def __init__(self, list_of_residues):
+    def __init__(self, list_of_residues, radius=None):
         self._list_of_residues = list_of_residues
+        if (radius is None):
+            self.fixed_radius = None
+        else:
+            try:
+                self.fixed_radius = float(radius)
+            except ValueError:
+                raise ValueError('Wrong subpocket radius')
 
     @property
     def list_of_residues(self):
         return self._list_of_residues
 
-    def get_centroid(self, snapshot):
+    def get_residue_coords(self, snapshot):
         coords = []
         for r in self.list_of_residues:
             index = snapshot.top.select('chainid {} '.format(r.chain_id) +
@@ -135,9 +152,105 @@ class Subpocket(object):
                                         'and name CA')
             coords.append(snapshot.xyz[0][index][0] * 10)
 
-        coords = np.stack(coords)
+        return np.stack(coords)
 
-        return Point(np.mean(coords, axis=0))
+    def get_centroid(self, snapshot, return_residue_coords=False):
+        coords = self.get_residue_coords(snapshot)
+
+        if (return_residue_coords):
+            return Point(np.mean(coords, axis=0)), coords
+        else:
+            return Point(np.mean(coords, axis=0))
+
+    def get_default_radius(self, snapshot, return_centroid=False):
+        centroid, coords = self.get_centroid(snapshot, True)
+
+        radius = np.sqrt(np.max(
+            [squared_distances(c, centroid) for c in coords]))
+
+        if (return_centroid):
+            return radius, centroid
+        else:
+            return radius
+
+    def get_volume(self, snapshot):
+        radius = self.fixed_radius
+
+        if (self.fixed_radius is None):
+            radius = self.get_default_radius(snapshot)
+
+        return FOUR_THIRDS_PI * np.power(radius, 3)
+
+    def _calculate_intersections(self, atom_radii, atom_coords, centroid, s_r):
+        intersections = {}
+        for atom, a_r in atom_radii.items():
+            # Calculate bounds
+            lower_bound = np.abs(s_r - a_r)
+            upper_bound = s_r + a_r
+
+            # Calculate distance d between centers
+            coords = atom_coords[atom]
+            d = np.linalg.norm(centroid - coords)
+
+            # Minimum radius
+            min_radius = np.min((a_r, s_r))
+
+            # Calculate intersections
+            if (d >= upper_bound):
+                intersections[atom] = 0
+            elif (d <= lower_bound):
+                intersections[atom] = FOUR_THIRDS_PI * np.power(min_radius, 3)
+            else:
+                intersections[atom] = np.pi
+                intersections[atom] *= np.power(s_r + a_r - d, 2)
+                dd = np.power(d, 2)
+                da = 2 * d * a_r
+                aa = -3 * np.power(a_r, 2)
+                ds = 2 * d * s_r
+                ss = -3 * np.power(s_r, 2)
+                sa = 6 * s_r * a_r
+                intersections[atom] *= dd + da + aa + ds + ss + sa
+                intersections[atom] /= 12 * d
+
+        return intersections
+
+    def get_intersection(self, snapshot, ligand_resname, centroid=None,
+                         radius=None, individual=False):
+        if (centroid is None or radius is None):
+            if (self.fixed_radius is None):
+                radius, centroid = self.get_default_radius(snapshot, True)
+            else:
+                radius = self.fixed_radius
+                centroid = self.get_centroid(snapshot)
+
+        lig = snapshot.topology.select('resname {}'.format(ligand_resname))
+
+        atom_radius = {}
+        atom_coords = {}
+        for atom_id in lig:
+            atom = snapshot.top.atom(atom_id)
+            name = atom.name
+            atom_radius[name] = atom.element.radius * 10  # In angstroms
+            atom_coords[name] = snapshot.xyz[0][atom_id] * 10  # In angstroms
+
+        intersections = self._calculate_intersections(atom_radius, atom_coords,
+                                                      centroid, radius)
+
+        if (individual):
+            return intersections
+        else:
+            return np.sum(list(intersections.values()))
+
+    def full_characterize(self, snapshot, ligand_resname):
+        if (self.fixed_radius is None):
+            radius, centroid = self.get_default_radius(snapshot, True)
+        else:
+            radius = self.fixed_radius
+            centroid = self.get_centroid(snapshot)
+        intersection = self.get_intersection(snapshot, ligand_resname,
+                                             centroid, radius)
+
+        return centroid, FOUR_THIRDS_PI * np.power(radius, 3), intersection
 
 
 def build_residues(residues_list, chain_ids_map=None):

@@ -54,6 +54,10 @@ def parse_args():
                         metavar="NAME", type=str, default=None,
                         help="Name of each subpocket")
 
+    parser.add_argument("--subpocket_radii", nargs='*',
+                        metavar="RADIUS", type=float, default=None,
+                        help="Fixed radius of each subpocket")
+
     parser.add_argument("-p", "--probe_atom_name",
                         metavar="NAME", type=str, default='CA',
                         help="Name of probe atom that will be used to " +
@@ -74,12 +78,14 @@ def parse_args():
 
     return args.traj_paths, args.ligand_resname, args.topology_path, \
         args.report_name, args.subpocket, args.subpocket_names, \
-        args.probe_atom_name, args.processors_number, args.output_path, \
-        args.PELE_output_path
+        args.subpocket_radii, args.probe_atom_name, args.processors_number, \
+        args.output_path, args.PELE_output_path
 
 
-def subpocket_analysis(sim_path, subpockets, topology_path, trajectory):
+def subpocket_analysis(sim_path, subpockets, topology_path, lig_resname,
+                       trajectory):
     results = []
+
     for i, snapshot in enumerate(md.load(str(trajectory),
                                          top=str(topology_path))):
         entry = []
@@ -89,7 +95,11 @@ def subpocket_analysis(sim_path, subpockets, topology_path, trajectory):
                          trajectory.name))))
         entry.append(i)
         for subpocket in subpockets:
-            entry.append(subpocket.get_centroid(snapshot))
+            centroid, volume, intersection = \
+                subpocket.full_characterize(snapshot, lig_resname)
+            entry.append(centroid)
+            entry.append(volume)
+            entry.append(intersection)
 
         results.append(entry)
 
@@ -99,14 +109,31 @@ def subpocket_analysis(sim_path, subpockets, topology_path, trajectory):
 def main():
     # Parse args
     PELE_sim_paths, lig_resname, topology_relative_path, report_name, \
-        subpockets_residues, subpocket_names, probe_atom_name, proc_number, \
-        output_path, PELE_output_path = parse_args()
+        subpockets_residues, subpocket_names, subpocket_radii, \
+        probe_atom_name, proc_number, output_path, PELE_output_path = \
+        parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
+
+    print(' - The following PELE simulation paths will be analyzed:')
+    for PELE_sim_path in all_sim_it:
+        print('   - {}'.format(PELE_sim_path))
+
+    print(' - The following subpockets will be analyzed:')
+    for i, subpocket_residues in enumerate(subpockets_residues):
+        if (subpocket_names is not None and
+                len(subpocket_names) == len(subpockets_residues)):
+            print('   - {}: {}'.format(subpocket_names[i], subpocket_residues))
+        else:
+            print('   - {}: {}'.format('S{}'.format(i + 1),
+                  subpocket_residues))
 
     data = pd.DataFrame()
 
     for PELE_sim_path in all_sim_it:
+        print('')
+        print(' - Analyzing {}'.format(PELE_sim_path))
+
         topology_path = PELE_sim_path.joinpath(topology_relative_path)
 
         if (not topology_path.is_file()):
@@ -116,13 +143,24 @@ def main():
 
         chain_converter = ChainConverterForMDTraj(str(topology_path))
 
+        if (subpocket_radii is not None and
+                len(subpocket_radii) != len(subpockets_residues)):
+            print(' - Warning: length of subpocket_radii does not match ' +
+                  'with length of subpockets, fixed radii are ignored.')
+            subpocket_radii = None
+
         subpockets = []
-        for subpocket_residues in subpockets_residues:
+        for i, subpocket_residues in enumerate(subpockets_residues):
             residues = build_residues([(i.split(':')[0], int(i.split(':')[1]))
                                       for i in subpocket_residues],
                                       chain_converter)
 
-            subpockets.append(Subpocket(residues))
+            if (subpocket_radii is None):
+                radius = None
+            else:
+                radius = subpocket_radii[i]
+
+            subpockets.append(Subpocket(residues, radius))
 
         sim_it = SimIt(PELE_sim_path)
         sim_it.build_traj_it(PELE_output_path, 'trajectory', 'xtc')
@@ -141,7 +179,7 @@ def main():
                 subpocket_names.append('S{}'.format(i + 1))
 
         parallel_function = partial(subpocket_analysis, PELE_sim_path,
-                                    subpockets, topology_path)
+                                    subpockets, topology_path, lig_resname)
 
         with Pool(proc_number) as pool:
             results = pool.map(parallel_function, trajectories)
@@ -150,7 +188,11 @@ def main():
             [data, ] +
             [pd.DataFrame([r],
              columns=['simulation', 'epoch', 'trajectory', 'model'] +
-                ["{}_centroid".format(i) for i in subpocket_names])
+                [j for i in zip(
+                    ["{}_centroid".format(i) for i in subpocket_names],
+                    ["{}_volume".format(i) for i in subpocket_names],
+                    ["{}_intersection".format(i) for i in subpocket_names]
+                ) for j in i])
              for r in np.concatenate(results)])
 
     data.to_csv(output_path)
