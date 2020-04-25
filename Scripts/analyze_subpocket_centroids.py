@@ -98,8 +98,8 @@ def main():
             ax3.boxplot(centroid_coords[:, 2])
 
             plt.tight_layout(rect=(0, 0, 0.95, 0.95))
-            plt.savefig(out_path.joinpath('{}_centroid_analysis.png'.format(
-                simulation.replace('.', 'simulation'))))
+            plt.savefig(out_path.joinpath('{}_{}_centroid_analysis.png'.format(
+                simulation.replace('.', 'simulation'), subpocket)))
             plt.close()
 
 
