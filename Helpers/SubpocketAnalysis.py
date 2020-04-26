@@ -10,7 +10,7 @@ from pathlib import Path
 # External imports
 import numpy as np
 
-# Module imports
+# Local imports
 SCRIPT_PATH = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(SCRIPT_PATH))
 from Utils import squared_distances

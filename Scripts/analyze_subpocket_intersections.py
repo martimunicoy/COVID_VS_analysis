@@ -11,7 +11,6 @@ from collections import defaultdict
 # External imports
 import pandas as pd
 import numpy as np
-from matplotlib import pyplot as plt
 from multiprocessing import Pool
 
 # Local imports

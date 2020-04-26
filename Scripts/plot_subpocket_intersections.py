@@ -93,7 +93,7 @@ def main():
         raise ValueError('No subpockets were found in the simulation paths ' +
                          'that were supplied')
 
-    fig, axs = plt.subplots(len(subpockets), 1, figsize=(15, 10))
+    fig, axs = plt.subplots(len(subpockets), 1, figsize=(20, 15))
     fig.suptitle('Subpocket-LIG volume intersection')
 
     for i, subpocket in enumerate(subpockets):
@@ -131,15 +131,21 @@ def main():
                     ordered_labels.append(path)
 
             axs[i].boxplot(ordered_intersects,
-                           labels=ordered_labels)
+                           labels=ordered_labels,
+                           showfliers=False)
 
     except ValueError:
         print(' - Unordered plot')
         for i, subpocket in enumerate(subpockets):
             axs[i].boxplot(list(intersects[subpocket].values()),
-                           labels=list(intersects[subpocket].keys()))
+                           labels=list(intersects[subpocket].keys()),
+                           showfliers=False)
 
-    plt.tight_layout(rect=(0, 0, 0.95, 0.95))
+    for ax in axs:
+        for tick in ax.get_xticklabels():
+            tick.set_rotation(90)
+
+    plt.tight_layout(h_pad=5, rect=(0, 0.05, 1, 0.95))
     plt.savefig('subpocket_intersections.png')
     plt.close()
 
