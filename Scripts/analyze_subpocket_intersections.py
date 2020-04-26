@@ -133,8 +133,6 @@ def main():
         sim_name = PELE_sim_path.name
         if (sim_name == ''):
             sim_name = '.'
-        if (sim_name in simulations_in_csv):
-            simulations_to_analyze.append(PELE_sim_path)
 
         print(' - Analyzing {}'.format(sim_name))
 
@@ -161,6 +159,26 @@ def main():
         all_intersections = pd.DataFrame.from_dict(all_intersections)
         all_intersections.to_csv(
             str(PELE_sim_path.joinpath(out_relative_path)))
+
+        with open(str(PELE_sim_path.joinpath(
+                'intersections_info.txt')), 'w') as f:
+            f.write(' - Subpocket results:\n')
+            for subpocket in subpockets:
+                intersects = all_intersections.loc[:, subpocket].to_numpy()
+                f.write('   - {}:\n'.format(subpocket))
+                f.write('     - Mean: {: 7.2f}\n'.format(np.mean(intersects)))
+                f.write('     - Min: {: 7.2f}\n'.format(np.min(intersects)))
+                f.write('     - 5th percentile: {: 7.2f}\n'.format(
+                    np.percentile(intersects, 5)))
+                f.write('     - 1st quartile: {: 7.2f}\n'.format(
+                    np.percentile(intersects, 25)))
+                f.write('     - Median: {: 7.2f}\n'.format(
+                    np.median(intersects)))
+                f.write('     - 3rd quartile: {: 7.2f}\n'.format(
+                    np.percentile(intersects, 75)))
+                f.write('     - 95th percentile: {: 7.2f}\n'.format(
+                    np.percentile(intersects, 95)))
+                f.write('     - Max: {: 7.2f}\n'.format(np.max(intersects)))
 
 
 if __name__ == "__main__":

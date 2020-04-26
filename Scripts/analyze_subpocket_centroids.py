@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 
-# PELE imports
+# Module imports
 SCRIPT_PATH = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(SCRIPT_PATH + '/..'))
 from Helpers.Utils import convert_string_to_numpy_array
