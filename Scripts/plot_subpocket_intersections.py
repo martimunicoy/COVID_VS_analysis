@@ -37,13 +37,17 @@ def parse_args():
                         nargs='*',
                         help="Path to PELE trajectory files")
 
-    parser.add_argument("--csv", metavar="STR", type=str,
+    parser.add_argument("--intersections", metavar="STR", type=str,
                         help="Intersections csv file name",
                         default='intersections.csv')
 
+    parser.add_argument("--ic50", metavar="STR", type=str,
+                        help="IC50 csv file name",
+                        default=None)
+
     args = parser.parse_args()
 
-    return args.traj_paths, args.csv
+    return args.traj_paths, args.intersections, args.ic50
 
 
 def analyze_subpocket_intersections(report_csv, report_path, subpockets):
@@ -65,7 +69,7 @@ def analyze_subpocket_intersections(report_csv, report_path, subpockets):
 
 def main():
     # Parse args
-    PELE_sim_paths, csv_file_name = parse_args()
+    PELE_sim_paths, csv_file_name, ic50_csv = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -89,7 +93,7 @@ def main():
         raise ValueError('No subpockets were found in the simulation paths ' +
                          'that were supplied')
 
-    fig, axs = plt.subplots(len(subpockets), 1, figsize=(10, 8))
+    fig, axs = plt.subplots(len(subpockets), 1, figsize=(15, 10))
     fig.suptitle('Subpocket-LIG volume intersection')
 
     for i, subpocket in enumerate(subpockets):
@@ -110,9 +114,30 @@ def main():
             intersects[subpocket][PELE_sim_path.name] = \
                 data[subpocket].to_numpy()
 
-    for i, subpocket in enumerate(subpockets):
-        axs[i].boxplot(list(intersects[subpocket].values()),
-                       labels=list(intersects[subpocket].keys()))
+    try:
+        if (ic50_csv is None):
+            raise ValueError
+        ic50_data = pd.read_csv(ic50_csv)
+
+        ic50_data['-pIC50'] = - np.log10(ic50_data.loc[:, 'IC50'] / 1000000)
+        ic50_data.sort_values(by='-pIC50', inplace=True)
+
+        for i, subpocket in enumerate(subpockets):
+            ordered_intersects = []
+            ordered_labels = []
+            for path, pic50 in zip(ic50_data['path'], ic50_data['-pIC50']):
+                if (path in intersects[subpocket]):
+                    ordered_intersects.append(intersects[subpocket][path])
+                    ordered_labels.append(path)
+
+            axs[i].boxplot(ordered_intersects,
+                           labels=ordered_labels)
+
+    except ValueError:
+        print(' - Unordered plot')
+        for i, subpocket in enumerate(subpockets):
+            axs[i].boxplot(list(intersects[subpocket].values()),
+                           labels=list(intersects[subpocket].keys()))
 
     plt.tight_layout(rect=(0, 0, 0.95, 0.95))
     plt.savefig('subpocket_intersections.png')
