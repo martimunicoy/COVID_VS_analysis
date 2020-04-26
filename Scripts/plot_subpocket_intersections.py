@@ -111,7 +111,6 @@ def main():
                 data[subpocket].to_numpy()
 
     for i, subpocket in enumerate(subpockets):
-        print(intersects[subpocket])
         axs[i].boxplot(list(intersects[subpocket].values()),
                        labels=list(intersects[subpocket].keys()))
 
