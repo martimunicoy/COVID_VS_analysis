@@ -138,7 +138,8 @@ def main():
         print(' - Unordered plot')
         for i, subpocket in enumerate(subpockets):
             axs[i].boxplot(list(intersects[subpocket].values()),
-                           labels=list(intersects[subpocket].keys()),
+                           labels=[i.split('_')[1] for i in
+                           list(intersects[subpocket].keys())],
                            showfliers=False)
 
     for ax in axs:
