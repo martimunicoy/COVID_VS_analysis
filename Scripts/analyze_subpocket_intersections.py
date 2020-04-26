@@ -129,7 +129,14 @@ def main():
     for PELE_sim_path in simulations_to_analyze:
         sim_it = SimIt(PELE_sim_path)
         sim_it.build_repo_it(PELE_output_path, report_name)
-        print(' - Analyzing {}'.format(PELE_sim_path.name))
+
+        sim_name = PELE_sim_path.name
+        if (sim_name == ''):
+            sim_name = '.'
+        if (sim_name in simulations_in_csv):
+            simulations_to_analyze.append(PELE_sim_path)
+
+        print(' - Analyzing {}'.format(sim_name))
 
         sim_csv = data[data['simulation'] == sim_name]
         reports = [repo for repo in sim_it.repo_it]
