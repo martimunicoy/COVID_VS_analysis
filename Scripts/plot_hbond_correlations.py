@@ -106,8 +106,8 @@ def main():
     data = data.merge(ic50, left_on='path', right_on='path')
     data['pIC50'] = - np.log10(data.loc[:, 'IC50'] / 1000000)
 
-    print(' - Normalizing H bonds')
     if (normalize):
+        print(' - Normalizing H bonds')
         for hbond in spec_hbonds:
             data[spec_hbonds] = data[spec_hbonds] / data['donors+acceptors']
 
