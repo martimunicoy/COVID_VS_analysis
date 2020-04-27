@@ -73,6 +73,7 @@ def main():
             continue
 
         data = pd.read_csv(str(csv_path))
+        data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
 
         columns = []
         print('   - Subpockets found:')

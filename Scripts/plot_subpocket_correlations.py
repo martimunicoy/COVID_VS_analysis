@@ -66,7 +66,7 @@ def main():
     columns = []
     for PELE_sim_path in all_sim_it:
         if (not PELE_sim_path.joinpath(csv_file_name).is_file()):
-            print(' - Skipping simulation because intersections csv file ' +
+            print(' - Skipping simulation because subpockets csv file ' +
                   'was missing')
             continue
 
