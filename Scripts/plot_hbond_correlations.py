@@ -112,7 +112,8 @@ def main():
             data[spec_hbonds] = data[spec_hbonds] / data['donors+acceptors']
 
     fig, axs = plt.subplots(int(len(spec_hbonds) / 2) +
-                            len(spec_hbonds) % 2, 2, figsize=(20, 15))
+                            len(spec_hbonds) % 2, 2,
+                            figsize=(15, 7.5 * int(len(spec_hbonds) / 2)))
     fig.suptitle('H bond frequency vs -pIC50')
 
     X_all = data.loc[:, spec_hbonds].values
@@ -121,7 +122,10 @@ def main():
     for i, hbond in enumerate(spec_hbonds):
         ax = axs[int(i / 2)][i % 2]
         ax.set_title(hbond)
-        ax.set_ylabel('Frequency')
+        if (normalize):
+            ax.set_ylabel('Normalized frequency')
+        else:
+            ax.set_ylabel('Frequency')
         ax.set_xlabel('-pIC50')
 
         x_array = np.array([X[i] for X in X_all])
@@ -132,7 +136,6 @@ def main():
         ax.set_facecolor('lightgray')
 
         lin_reg = LinearRegression()
-        print(y_all, x_array)
         lin_reg.fit(y_all.reshape(-1, 1), x_array.reshape(-1, 1))
         y_pred = lin_reg.predict(y_all.reshape(-1, 1))
         for x, xp, y, l in zip(x_array, y_pred, y_all, data['path'].values):
@@ -161,7 +164,11 @@ def main():
                   fancybox=True, framealpha=0.7,
                   handlelength=0, handletextpad=0)
 
-    plt.tight_layout(h_pad=5, rect=(0, 0.05, 1, 0.95))
+    # Empty unpaired axis
+    if (i % 2 == 0):
+            fig.delaxes(axs[int(i / 2)][1])
+
+    plt.tight_layout(rect=(0, 0.05, 1, 1))
     plt.savefig('Hbond_correlations.png')
     plt.close()
 
