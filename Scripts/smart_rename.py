@@ -29,13 +29,21 @@ def parse_args():
                         help="Field or set of fields that will be kept",
                         default='-1')
 
+    parser.add_argument('--debug',
+                        dest='debug',
+                        action='store_true',
+                        help='Debug the behavior of the script without doing' +
+                        'any real modification')
+
+    parser.set_defaults(debug=False)
+
     args = parser.parse_args()
 
-    return args.folders, args.delimiter, args.field
+    return args.folders, args.delimiter, args.field, args.debug
 
 
 def main():
-    folders, delimiter, field = parse_args()
+    folders, delimiter, field, debug = parse_args()
 
     fields = []
     for f in field.split(','):
@@ -63,7 +71,11 @@ def main():
                   'fields were out of range')
             continue
 
-        folder.rename(new_name)
+        if (debug):
+            print(' - Folder {} would be renamed to {}'.format(
+                folder, new_name))
+        else:
+            folder.rename(new_name)
 
 
 if __name__ == "__main__":
