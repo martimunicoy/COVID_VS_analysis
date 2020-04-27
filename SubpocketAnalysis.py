@@ -5,6 +5,8 @@
 import argparse as ap
 from functools import partial
 from multiprocessing import Pool
+from pathlib import Path
+import os
 
 # Local imports
 from Helpers.PELEIterator import SimIt
@@ -79,12 +81,11 @@ def parse_args():
                         dest='include_rejected_steps',
                         action='store_true')
 
-    parser.add_argument('--alternative_output_path',
-                        dest='alternative_output_path',
-                        action='store_true')
+    parser.add_argument("--alternative_output_path",
+                        metavar="PATH", type=str, default='None',
+                        help="Alternative path to save output results")
 
     parser.set_defaults(include_rejected_steps=False)
-    parser.set_defaults(alternative_output_path=False)
 
     args = parser.parse_args()
 
@@ -253,7 +254,18 @@ def main():
 
             data = pd.concat(results)
 
-        data.to_csv(str(PELE_sim_path.joinpath(output_name)))
+        if (alternative_output_path is not None):
+            output_path = Path(alternative_output_path)
+            output_path = output_path.joinpath(PELE_sim_path.name)
+            output_path = output_path.joinpath(output_name)
+            try:
+                os.makedirs(str(output_path.parent))
+            except FileExistsError:
+                pass
+        else:
+            output_path = PELE_sim_path.joinpath(output_name)
+
+        data.to_csv(str(output_path))
 
 
 if __name__ == "__main__":

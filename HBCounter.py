@@ -31,45 +31,55 @@ def parse_args():
     parser.add_argument("sim_paths", metavar="PATH", type=str,
                         nargs='*',
                         help="Path to PELE simulation folders")
+
     parser.add_argument("-l", "--ligand_resname",
                         metavar="LIG", type=str, default='LIG',
                         help="Ligand residue name")
+
     parser.add_argument("-d", "--distance",
                         metavar="D", type=float, default='0.25',
                         help="Hydrogen bonds distance")
+
     parser.add_argument("-a", "--angle",
                         metavar="A", type=float, default='2.0943951023931953',
                         help="Hydrogen bonds angle")
+
     parser.add_argument("-p", "--pseudo_hb",
                         metavar="BOOL", type=bool, default=False,
                         help="Look for pseudo hydrogen bonds")
+
     parser.add_argument("-n", "--processors_number",
                         metavar="N", type=int, default=None,
                         help="Number of processors")
+
     parser.add_argument("-t", "--topology_path",
                         metavar="PATH", type=str,
                         default='output/topologies/topology_0.pdb',
                         help="Relative path to topology")
+
     parser.add_argument("-o", "--output_path",
                         metavar="PATH", type=str,
                         default='hbonds.out',
                         help="Relative path to output file")
+
     parser.add_argument("--PELE_output_path",
                         metavar="PATH", type=str, default='output',
                         help="Relative path to PELE output folder")
+
     parser.add_argument("-r", "--report_name",
                         metavar="NAME", type=str,
                         default='report',
                         help="PELE report name")
+
     parser.add_argument('--include_rejected_steps',
                         dest='include_rejected_steps',
                         action='store_true')
-    parser.add_argument('--alternative_output_path',
-                        dest='alternative_output_path',
-                        action='store_true')
+
+    parser.add_argument("--alternative_output_path",
+                        metavar="PATH", type=str, default='None',
+                        help="Alternative path to save output results")
 
     parser.set_defaults(include_rejected_steps=False)
-    parser.set_defaults(alternative_output_path=False)
 
     args = parser.parse_args()
 
@@ -226,8 +236,8 @@ def main():
             for a in _acceptors:
                 acceptors.add(a)
 
-        if (alternative_output_path):
-            output_path = Path('HB_counter_output')
+        if (alternative_output_path is not None):
+            output_path = Path(alternative_output_path)
             output_path = output_path.joinpath(PELE_sim_path.name)
             output_path = output_path.joinpath(output_relative_path)
             try:
