@@ -6,15 +6,16 @@ import argparse as ap
 from functools import partial
 from multiprocessing import Pool
 
-# PELE imports
+# Local imports
 from Helpers.PELEIterator import SimIt
 from Helpers.SubpocketAnalysis import ChainConverterForMDTraj, Subpocket
 from Helpers.SubpocketAnalysis import build_residues
+from Helpers.Data import build_dataframe_from_results
+from Helpers.ReportUtils import extract_metrics
 
 # External imports
 import mdtraj as md
 import pandas as pd
-import numpy as np
 
 
 # Script information
@@ -67,19 +68,31 @@ def parse_args():
                         metavar="N", type=int, default=None,
                         help="Number of processors")
 
-    parser.add_argument("-o", "--output_path",
+    parser.add_argument("-o", "--output_name",
                         metavar="PATH", type=str, default="subpockets.csv")
 
     parser.add_argument("--PELE_output_path",
                         metavar="PATH", type=str, default='output',
                         help="Relative path to PELE output folder")
 
+    parser.add_argument('--include_rejected_steps',
+                        dest='include_rejected_steps',
+                        action='store_true')
+
+    parser.add_argument('--alternative_output_path',
+                        dest='alternative_output_path',
+                        action='store_true')
+
+    parser.set_defaults(include_rejected_steps=False)
+    parser.set_defaults(alternative_output_path=False)
+
     args = parser.parse_args()
 
     return args.traj_paths, args.ligand_resname, args.topology_path, \
         args.report_name, args.subpocket, args.subpocket_names, \
         args.subpocket_radii, args.probe_atom_name, args.processors_number, \
-        args.output_path, args.PELE_output_path
+        args.output_name, args.PELE_output_path, args.include_rejected_steps, \
+        args.alternative_output_path
 
 
 def subpocket_analysis(sim_path, subpockets, topology_path, lig_resname,
@@ -106,12 +119,68 @@ def subpocket_analysis(sim_path, subpockets, topology_path, lig_resname,
     return results
 
 
+def get_simulation_subpockets(residues, radii, topology_path):
+    chain_converter = ChainConverterForMDTraj(str(topology_path))
+
+    if (radii is not None and
+            len(radii) != len(residues)):
+        print(' - Warning: length of subpocket_radii does not match ' +
+              'with length of subpockets, fixed radii are ignored.')
+        radii = None
+
+    subpockets = []
+    for i, subpocket_residues in enumerate(residues):
+        residues = build_residues([(i.split(':')[0], int(i.split(':')[1]))
+                                  for i in subpocket_residues],
+                                  chain_converter)
+
+        if (radii is None):
+            radius = None
+        else:
+            radius = radii[i]
+
+        subpockets.append(Subpocket(residues, radius))
+
+    return subpockets
+
+
+def handle_subpocket_naming(subpocket_names, subpockets):
+    if (subpocket_names is not None and
+            len(subpocket_names) != len(subpockets)):
+        print(' - Warning: length of subpocket_names does not match ' +
+              'with length of subpockets, custom names are ignored.')
+        subpocket_names = None
+
+    if (subpocket_names is None):
+        subpocket_names = []
+        for i, subpocket in enumerate(subpockets):
+            subpocket_names.append('S{}'.format(i + 1))
+
+    return subpocket_names
+
+
+def account_for_rejected_intersections(report_df, report_path, subpockets):
+    metrics = extract_metrics((report_path, ), (3, ))[0]
+
+    new_report_df = pd.DataFrame()
+
+    accepted_steps = []
+    for m in metrics:
+        accepted_steps.append(int(m[0]))
+
+    for a_s in accepted_steps:
+        row = report_df[report_df['model'] == a_s]
+        new_report_df = pd.concat([new_report_df, row])
+
+    return new_report_df
+
+
 def main():
     # Parse args
     PELE_sim_paths, lig_resname, topology_relative_path, report_name, \
         subpockets_residues, subpocket_names, subpocket_radii, \
-        probe_atom_name, proc_number, output_path, PELE_output_path = \
-        parse_args()
+        probe_atom_name, proc_number, output_name, PELE_output_path, \
+        include_rejected_steps, alternative_output_path = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -128,8 +197,6 @@ def main():
             print('   - {}: {}'.format('S{}'.format(i + 1),
                   subpocket_residues))
 
-    data = pd.DataFrame()
-
     for PELE_sim_path in all_sim_it:
         print('')
         print(' - Analyzing {}'.format(PELE_sim_path))
@@ -141,61 +208,52 @@ def main():
                   'connectivity was missing')
             continue
 
-        chain_converter = ChainConverterForMDTraj(str(topology_path))
+        subpockets = get_simulation_subpockets(subpockets_residues,
+                                               subpocket_radii, topology_path)
 
-        if (subpocket_radii is not None and
-                len(subpocket_radii) != len(subpockets_residues)):
-            print(' - Warning: length of subpocket_radii does not match ' +
-                  'with length of subpockets, fixed radii are ignored.')
-            subpocket_radii = None
-
-        subpockets = []
-        for i, subpocket_residues in enumerate(subpockets_residues):
-            residues = build_residues([(i.split(':')[0], int(i.split(':')[1]))
-                                      for i in subpocket_residues],
-                                      chain_converter)
-
-            if (subpocket_radii is None):
-                radius = None
-            else:
-                radius = subpocket_radii[i]
-
-            subpockets.append(Subpocket(residues, radius))
-
+        # Build PELE iterables
         sim_it = SimIt(PELE_sim_path)
         sim_it.build_traj_it(PELE_output_path, 'trajectory', 'xtc')
+        sim_it.build_repo_it(PELE_output_path, report_name)
 
         trajectories = [traj for traj in sim_it.traj_it]
+        reports = [repo for repo in sim_it.repo_it]
 
-        if (subpocket_names is not None and
-                len(subpocket_names) != len(subpockets)):
-            print(' - Warning: length of subpocket_names does not match ' +
-                  'with length of subpockets, custom names are ignored.')
-            subpocket_names = None
+        # Handle subpocket naming
+        subpocket_names = handle_subpocket_naming(subpocket_names, subpockets)
 
-        if (subpocket_names is None):
-            subpocket_names = []
-            for i, subpocket in enumerate(subpockets):
-                subpocket_names.append('S{}'.format(i + 1))
-
+        # Subpocket analysis
         parallel_function = partial(subpocket_analysis, PELE_sim_path,
                                     subpockets, topology_path, lig_resname)
 
+        print('   - Subpocket analysis')
         with Pool(proc_number) as pool:
             results = pool.map(parallel_function, trajectories)
 
-        data = pd.concat(
-            [data, ] +
-            [pd.DataFrame([r],
-             columns=['simulation', 'epoch', 'trajectory', 'model'] +
-                [j for i in zip(
-                    ["{}_centroid".format(i) for i in subpocket_names],
-                    ["{}_volume".format(i) for i in subpocket_names],
-                    ["{}_intersection".format(i) for i in subpocket_names]
-                ) for j in i])
-             for r in np.concatenate(results)])
+        data = build_dataframe_from_results(
+            results, ['simulation', 'epoch', 'trajectory', 'model'] +
+            [j for i in zip(
+                ["{}_centroid".format(i) for i in subpocket_names],
+                ["{}_volume".format(i) for i in subpocket_names],
+                ["{}_intersection".format(i) for i in subpocket_names]
+            ) for j in i])
 
-    data.to_csv(output_path)
+        if (include_rejected_steps):
+            print('   - Considering intersections for rejected steps')
+            with Pool(proc_number) as pool:
+                results = []
+                for report in reports:
+                    epoch = int(report.parent.name)
+                    trajectory = int(''.join(filter(str.isdigit, report.name)))
+                    report_csv = data[(data['epoch'] == epoch) &
+                                      (data['trajectory'] == trajectory)]
+                    r = pool.apply(account_for_rejected_intersections,
+                                   (report_csv, report, subpockets))
+                    results.append(r)
+
+            data = pd.concat(results)
+
+        data.to_csv(str(PELE_sim_path.joinpath(output_name)))
 
 
 if __name__ == "__main__":
