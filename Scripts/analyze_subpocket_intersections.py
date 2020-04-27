@@ -31,140 +31,65 @@ __email__ = "marti.municoy@bsc.es"
 
 def parse_args():
     parser = ap.ArgumentParser()
-    parser.add_argument("csv_file", metavar="PATH", type=str,
-                        help="Path to subpockets csv file")
 
     parser.add_argument("traj_paths", metavar="PATH", type=str,
                         nargs='*',
                         help="Path to PELE trajectory files")
 
-    parser.add_argument("-o", "--output_path",
+    parser.add_argument("--csv_name",
                         metavar="PATH", type=str,
-                        default="intersections.csv")
+                        default="subpockets.csv",
+                        help='Name of the subpockets csv file')
 
-    parser.add_argument("-n", "--processors_number",
-                        metavar="N", type=int, default=None,
-                        help="Number of processors")
-
-    parser.add_argument("-p", "--PELE_output_path",
-                        metavar="PATH", type=str, default='output',
-                        help="Relative path to PELE output folder")
-
-    parser.add_argument("-r", "--report_name",
-                        metavar="NAME", type=str,
-                        default='report',
-                        help="PELE report name")
+    parser.add_argument("-o", "--output_name",
+                        metavar="PATH", type=str,
+                        default="intersections_info.txt",
+                        help='Intersections output file name')
 
     args = parser.parse_args()
 
-    return args.csv_file, args.traj_paths, args.output_path, \
-        args.processors_number, args.PELE_output_path, args.report_name
-
-
-def analyze_subpocket_intersections(report_csv, report_path, subpockets):
-    intersections = defaultdict(list)
-    metrics = extract_metrics((report_path, ), (3, ))[0]
-
-    accepted_steps = []
-    for m in metrics:
-        accepted_steps.append(int(m[0]))
-
-    for a_s in accepted_steps:
-        row = report_csv[report_csv['model'] == a_s]
-        for sp in subpockets:
-            value = float(row['{}_intersection'.format(sp)])
-            intersections[sp].append(value)
-
-    return intersections
+    return args.traj_paths, args.csv_name, args.output_name
 
 
 def main():
     # Parse args
-    csv_file, PELE_sim_paths, out_relative_path, proc_number, \
-        PELE_output_path, report_name = parse_args()
-
-    csv_file = Path(csv_file)
-    out_relative_path = Path(out_relative_path)
-
-    if (not csv_file.is_file()):
-        raise ValueError('Wrong path to csv file')
-
-    data = pd.read_csv(csv_file)
-
-    subpockets = []
-    for column in data.columns:
-        if ('intersection' in column):
-            subpockets.append(column.strip('_intersection'))
-
-    if (len(subpockets) == 0):
-        raise RuntimeError('No subpocket was found at {}'.format(csv_file))
-    else:
-        print(' - The following subpocket{} found:'.format(
-            [' was', 's were'][len(subpockets) > 1]))
-        for subpocket in subpockets:
-            print('   - {}'.format(subpocket))
-
-    data['simulation'].fillna('.', inplace=True)
-    simulations_in_csv = set(data['simulation'].to_list())
-
-    print(' - {} simulation{} found'.format(
-        len(simulations_in_csv),
-        [' was', 's were'][len(simulations_in_csv) > 1]))
+    PELE_sim_paths, csv_file, output_name = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
-    simulations_to_analyze = []
-    for PELE_sim_path in all_sim_it:
-        sim_name = PELE_sim_path.name
-        if (sim_name == ''):
-            sim_name = '.'
-        if (sim_name in simulations_in_csv):
-            simulations_to_analyze.append(PELE_sim_path)
-
     print(' - Simulations that will be analyzed:')
-    for sim_path in simulations_to_analyze:
+    for sim_path in all_sim_it:
         print('   - {}'.format(sim_path.name))
 
-    for PELE_sim_path in simulations_to_analyze:
-        sim_it = SimIt(PELE_sim_path)
-        sim_it.build_repo_it(PELE_output_path, report_name)
+    for PELE_sim_path in all_sim_it:
+        print('')
+        print(' - Analyzing {}'.format(PELE_sim_path))
 
-        sim_name = PELE_sim_path.name
-        if (sim_name == ''):
-            sim_name = '.'
+        csv_path = PELE_sim_path.joinpath(csv_file)
 
-        print(' - Analyzing {}'.format(sim_name))
+        if (not csv_path.is_file()):
+            print(' - Skipping simulation because intersections csv file ' +
+                  'was missing')
+            continue
 
-        sim_csv = data[data['simulation'] == sim_name]
-        reports = [repo for repo in sim_it.repo_it]
+        data = pd.read_csv(str(csv_path))
 
-        with Pool(proc_number) as pool:
-            results = []
-            for report in reports:
-                epoch = int(report.parent.name)
-                trajectory = int(''.join(filter(str.isdigit, report.name)))
-                report_csv = sim_csv[(sim_csv['epoch'] == epoch) &
-                                     (sim_csv['trajectory'] == trajectory)]
-                r = pool.apply(analyze_subpocket_intersections,
-                               (report_csv, report, subpockets))
-                results.append(r)
+        columns = []
+        print('   - Subpockets found:')
+        for col in data.columns:
+            if ('_intersection' in col):
+                columns.append(col)
+                print('     - {}'.format(col.strip('_intersection')))
 
-        all_intersections = defaultdict(list)
-        for r in results:
-            for subpocket, intersections in r.items():
-                for i in intersections:
-                    all_intersections[subpocket].append(i)
+        if (len(columns) == 0):
+            print(' - Skipping simulation because no subpocket was found')
+            continue
 
-        all_intersections = pd.DataFrame.from_dict(all_intersections)
-        all_intersections.to_csv(
-            str(PELE_sim_path.joinpath(out_relative_path)))
-
-        with open(str(PELE_sim_path.joinpath(
-                'intersections_info.txt')), 'w') as f:
-            f.write(' - Subpocket results:\n')
-            for subpocket in subpockets:
-                intersects = all_intersections.loc[:, subpocket].to_numpy()
-                f.write('   - {}:\n'.format(subpocket))
+        with open(str(PELE_sim_path.joinpath(output_name)), 'w') as f:
+            f.write('   - Subpocket results:\n')
+            for col in columns:
+                intersects = data.loc[:, col].to_numpy()
+                f.write('   - {}:\n'.format(col.strip('_intersection')))
                 f.write('     - Mean: {: 7.2f}\n'.format(np.mean(intersects)))
                 f.write('     - Min: {: 7.2f}\n'.format(np.min(intersects)))
                 f.write('     - 5th percentile: {: 7.2f}\n'.format(
