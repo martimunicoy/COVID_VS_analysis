@@ -5,7 +5,6 @@
 import argparse as ap
 import os
 import sys
-from collections import defaultdict
 
 # External imports
 import pandas as pd
@@ -101,7 +100,7 @@ def main():
         sim_data['path'] = PELE_sim_path.name
         data = pd.concat((data, sim_data))
 
-    print(' - Retreving IC50 values')
+    print(' - Retrieving IC50 values')
     ic50 = pd.read_csv(ic50_csv)
     data = data.merge(ic50, left_on='path', right_on='path')
     data['pIC50'] = - np.log10(data.loc[:, 'IC50'] / 1000000)
@@ -112,9 +111,9 @@ def main():
         for hbond in spec_hbonds:
             data[hbond] = data[hbond] / data['donors+acceptors']
 
-    fig, axs = plt.subplots(int(len(spec_hbonds) / 2) +
-                            len(spec_hbonds) % 2, 2,
-                            figsize=(15, 7.5 * int(len(spec_hbonds) / 2)))
+    fig, axs = plt.subplots(int(len(spec_hbonds) / 2) + len(spec_hbonds) % 2,
+                            2, figsize=(15, 5 * int(len(spec_hbonds) / 2 +
+                                        len(spec_hbonds) % 2)))
     fig.suptitle('H bond frequency vs -pIC50')
 
     X_all = data.loc[:, spec_hbonds].values
