@@ -168,7 +168,7 @@ def main():
     if (i % 2 == 0):
             fig.delaxes(axs[int(i / 2)][1])
 
-    plt.tight_layout(rect=(0, 0.05, 1, 1))
+    plt.tight_layout(rect=(0, 0, 1, 0.97))
     plt.savefig('Hbond_correlations.png')
     plt.close()
 
