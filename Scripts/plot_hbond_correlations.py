@@ -105,7 +105,6 @@ def main():
     ic50 = pd.read_csv(ic50_csv)
     data = data.merge(ic50, left_on='path', right_on='path')
     data['pIC50'] = - np.log10(data.loc[:, 'IC50'] / 1000000)
-    print(data)
 
     if (normalize):
         print(' - Normalizing H bonds')
