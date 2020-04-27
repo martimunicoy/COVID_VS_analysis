@@ -3,7 +3,6 @@
 
 # Standard imports
 import argparse as ap
-from pathlib import Path
 import os
 import sys
 from collections import defaultdict
@@ -12,14 +11,11 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
-from multiprocessing import Pool
 
 # Local imports
 SCRIPT_PATH = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(SCRIPT_PATH + '/..'))
-from Helpers.Utils import convert_string_to_numpy_array
 from Helpers.PELEIterator import SimIt
-from Helpers.ReportUtils import extract_metrics
 
 
 # Script information
@@ -37,9 +33,9 @@ def parse_args():
                         nargs='*',
                         help="Path to PELE trajectory files")
 
-    parser.add_argument("--intersections", metavar="STR", type=str,
-                        help="Intersections csv file name",
-                        default='intersections.csv')
+    parser.add_argument("--subpockets", metavar="STR", type=str,
+                        help="Subpockets csv file name",
+                        default='subpockets.csv')
 
     parser.add_argument("--ic50", metavar="STR", type=str,
                         help="IC50 csv file name",
@@ -47,24 +43,7 @@ def parse_args():
 
     args = parser.parse_args()
 
-    return args.traj_paths, args.intersections, args.ic50
-
-
-def analyze_subpocket_intersections(report_csv, report_path, subpockets):
-    intersections = defaultdict(list)
-    metrics = extract_metrics((report_path, ), (3, ))[0]
-
-    accepted_steps = []
-    for m in metrics:
-        accepted_steps.append(int(m[0]))
-
-    for a_s in accepted_steps:
-        row = report_csv[report_csv['model'] == a_s]
-        for sp in subpockets:
-            value = float(row['{}_intersection'.format(sp)])
-            intersections[sp].append(value)
-
-    return intersections
+    return args.traj_paths, args.subpockets, args.ic50
 
 
 def main():
@@ -77,28 +56,36 @@ def main():
     for sim_path in all_sim_it:
         print('   - {}'.format(sim_path.name))
 
-    subpockets = []
+    columns = []
     for PELE_sim_path in all_sim_it:
         if (not PELE_sim_path.joinpath(csv_file_name).is_file()):
+            print(' - Skipping simulation because intersections csv file ' +
+                  'was missing')
             continue
 
         data = pd.read_csv(PELE_sim_path.joinpath(csv_file_name))
         data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
 
-        for s in data.columns:
-            if (s not in subpockets):
-                subpockets.append(s)
+        for col in data.columns:
+            if ('_intersection' in col):
+                if (col not in columns):
+                    columns.append(col)
 
-    if (len(subpockets) == 0):
-        raise ValueError('No subpockets were found in the simulation paths ' +
-                         'that were supplied')
+    print('   - Subpockets found:')
+    for col in columns:
+        print('     - {}'.format(col.strip('_intersection')))
 
-    fig, axs = plt.subplots(len(subpockets), 1, figsize=(20, 15))
+    if (len(columns) == 0):
+        raise ValueError('No subpocket intersections were found in the ' +
+                         'simulation paths that were supplied')
+
+    fig, axs = plt.subplots(len(columns), 1, figsize=(20, 15))
     fig.suptitle('Subpocket-LIG volume intersection')
 
-    for i, subpocket in enumerate(subpockets):
-        axs[i].set_title(subpocket)
-        axs[i].set_ylabel('{}-LIG volume intersection ($\AA^3$)'.format(subpocket))
+    for i, col in enumerate(columns):
+        axs[i].set_title(col.strip('_intersection'))
+        axs[i].set_ylabel('{}-LIG volume intersection ($\AA^3$)'.format(
+            col.strip('_intersection')))
 
     intersects = defaultdict(dict)
     for PELE_sim_path in all_sim_it:
@@ -110,9 +97,8 @@ def main():
 
         data = pd.read_csv(PELE_sim_path.joinpath(csv_file_name))
 
-        for i, subpocket in enumerate(subpockets):
-            intersects[subpocket][PELE_sim_path.name] = \
-                data[subpocket].to_numpy()
+        for i, col in enumerate(columns):
+            intersects[col][PELE_sim_path.name] = data[col].to_numpy()
 
     try:
         if (ic50_csv is None):
@@ -122,12 +108,12 @@ def main():
         ic50_data['-pIC50'] = - np.log10(ic50_data.loc[:, 'IC50'] / 1000000)
         ic50_data.sort_values(by='-pIC50', inplace=True)
 
-        for i, subpocket in enumerate(subpockets):
+        for i, col in enumerate(columns):
             ordered_intersects = []
             ordered_labels = []
             for path, pic50 in zip(ic50_data['path'], ic50_data['-pIC50']):
-                if (path in intersects[subpocket]):
-                    ordered_intersects.append(intersects[subpocket][path])
+                if (path in intersects[col]):
+                    ordered_intersects.append(intersects[col][path])
                     ordered_labels.append(path)
 
             axs[i].boxplot(ordered_intersects,
@@ -136,10 +122,10 @@ def main():
 
     except ValueError:
         print(' - Unordered plot')
-        for i, subpocket in enumerate(subpockets):
-            axs[i].boxplot(list(intersects[subpocket].values()),
+        for i, col in enumerate(columns):
+            axs[i].boxplot(list(intersects[col].values()),
                            labels=[i.split('_')[1] for i in
-                           list(intersects[subpocket].keys())],
+                           list(intersects[col].keys())],
                            showfliers=False)
 
     for ax in axs:
