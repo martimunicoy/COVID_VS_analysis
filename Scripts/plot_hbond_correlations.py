@@ -97,7 +97,7 @@ def main():
 
         print('   - Retrieving H bonds: {}'.format(spec_hbonds))
 
-        sim_data = sim_data.loc[:, spec_hbonds]
+        sim_data = sim_data.loc[:, spec_hbonds + ['donors', 'acceptors']]
         sim_data['path'] = PELE_sim_path.name
         data = pd.concat((data, sim_data))
 
@@ -105,11 +105,13 @@ def main():
     ic50 = pd.read_csv(ic50_csv)
     data = data.merge(ic50, left_on='path', right_on='path')
     data['pIC50'] = - np.log10(data.loc[:, 'IC50'] / 1000000)
+    print(data)
 
     if (normalize):
         print(' - Normalizing H bonds')
+        data['donors+acceptors'] = data['donors'] + data['acceptors']
         for hbond in spec_hbonds:
-            data[spec_hbonds] = data[spec_hbonds] / data['donors+acceptors']
+            data[hbond] = data[hbond] / data['donors+acceptors']
 
     fig, axs = plt.subplots(int(len(spec_hbonds) / 2) +
                             len(spec_hbonds) % 2, 2,
