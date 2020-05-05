@@ -7,6 +7,7 @@ from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
 import os
+from typing import List, Tuple, Optional
 
 # Local imports
 from Helpers.PELEIterator import SimIt
@@ -14,6 +15,7 @@ from Helpers.SubpocketAnalysis import ChainConverterForMDTraj, Subpocket
 from Helpers.SubpocketAnalysis import build_residues
 from Helpers.Data import build_dataframe_from_results
 from Helpers.ReportUtils import extract_metrics
+from Helpers.Template import ImpactTemplate
 
 # External imports
 import mdtraj as md
@@ -28,7 +30,9 @@ __maintainer__ = "Marti Municoy"
 __email__ = "marti.municoy@bsc.es"
 
 
-def parse_args():
+def parse_args() -> Tuple[str, str, str, str, str, str, Optional[str],
+                          Optional[float], str, Optional[int], str, str, bool,
+                          str]:
     parser = ap.ArgumentParser()
     parser.add_argument("traj_paths", metavar="PATH", type=str,
                         nargs='*',
@@ -43,6 +47,11 @@ def parse_args():
                         default='output/topologies/topology_0.pdb',
                         help="Relative path to topology")
 
+    parser.add_argument("--template_path",
+                        metavar="PATH", type=str,
+                        default='DataLocal/Templates/OPLS2005/HeteroAtoms/',
+                        help="Relative path to ligand's template folder")
+
     parser.add_argument("-r", "--report_name",
                         metavar="NAME", type=str,
                         default='report',
@@ -50,8 +59,8 @@ def parse_args():
 
     parser.add_argument("-s", "--subpocket", nargs='*', action='append',
                         metavar="C:R", type=str, default=[],
-                        help="Chain (C), residue (R) of the subset of " +
-                        "the residues that define the subpocket")
+                        help="Chain (C), residue (R) of the subset of "
+                        + "the residues that define the subpocket")
 
     parser.add_argument("--subpocket_names", nargs='*',
                         metavar="NAME", type=str, default=None,
@@ -63,8 +72,8 @@ def parse_args():
 
     parser.add_argument("-p", "--probe_atom_name",
                         metavar="NAME", type=str, default='CA',
-                        help="Name of probe atom that will be used to " +
-                        "define the subpocket")
+                        help="Name of probe atom that will be used to "
+                        + "define the subpocket")
 
     parser.add_argument("-n", "--processors_number",
                         metavar="N", type=int, default=None,
@@ -90,49 +99,64 @@ def parse_args():
     args = parser.parse_args()
 
     return args.traj_paths, args.ligand_resname, args.topology_path, \
-        args.report_name, args.subpocket, args.subpocket_names, \
-        args.subpocket_radii, args.probe_atom_name, args.processors_number, \
-        args.output_name, args.PELE_output_path, args.include_rejected_steps, \
-        args.alternative_output_path
+        args.template_path, args.report_name, args.subpocket, \
+        args.subpocket_names, args.subpocket_radii, args.probe_atom_name, \
+        args.processors_number, args.output_name, args.PELE_output_path, \
+        args.include_rejected_steps, args.alternative_output_path
 
 
-def subpocket_analysis(sim_path, subpockets, topology_path, lig_resname,
-                       trajectory):
+def file_check(topology_path: Path, template_path: Path) -> bool:
+    if (not topology_path.is_file()):
+        print(' - Skipping simulation because topology file with '
+              + 'connectivity was missing')
+        return False
+
+    if (not template_path.is_file()):
+        print(' - Skipping simulation because template file with '
+              + 'ligand parameters was missing')
+        return False
+
+    return True
+
+
+def subpocket_analysis(sim_path: Path, subpockets: list, topology_path: Path,
+                       lig_resname: str, lig_template: Path,
+                       trajectory: Path) -> List[Tuple]:
     results = []
 
     for i, snapshot in enumerate(md.load(str(trajectory),
                                          top=str(topology_path))):
-        entry = []
-        entry.append(sim_path.name)
-        entry.append(int(trajectory.parent.name))
-        entry.append(int(''.join(filter(str.isdigit,
-                         trajectory.name))))
-        entry.append(i)
+        entry = (sim_path.name,
+                 int(trajectory.parent.name),
+                 int(''.join(filter(str.isdigit, trajectory.name))),
+                 i)  # type: Tuple
         for subpocket in subpockets:
-            centroid, volume, intersection = \
-                subpocket.full_characterize(snapshot, lig_resname)
-            entry.append(centroid)
-            entry.append(volume)
-            entry.append(intersection)
+            centroid, volume, intersection, nonpolar_intersection, \
+                net_charge = subpocket.full_characterize(snapshot,
+                                                         lig_resname,
+                                                         lig_template)
+            entry = (entry + (centroid, volume, intersection,
+                              nonpolar_intersection, net_charge))
 
         results.append(entry)
 
     return results
 
 
-def get_simulation_subpockets(residues, radii, topology_path):
+def get_simulation_subpockets(residues: list, radii,
+                              topology_path: Path) -> List[Subpocket]:
     chain_converter = ChainConverterForMDTraj(str(topology_path))
 
-    if (radii is not None and
-            len(radii) != len(residues)):
-        print(' - Warning: length of subpocket_radii does not match ' +
-              'with length of subpockets, fixed radii are ignored.')
+    if (radii is not None and len(radii) != len(residues)):
+        print(' - Warning: length of subpocket_radii does not match '
+              + 'with length of subpockets, fixed radii are ignored.')
         radii = None
 
     subpockets = []
     for i, subpocket_residues in enumerate(residues):
-        residues = build_residues([(i.split(':')[0], int(i.split(':')[1]))
-                                  for i in subpocket_residues],
+        residues = build_residues([(i.split(':')[0],
+                                    int(i.split(':')[1]))
+                                   for i in subpocket_residues],
                                   chain_converter)
 
         if (radii is None):
@@ -145,11 +169,13 @@ def get_simulation_subpockets(residues, radii, topology_path):
     return subpockets
 
 
-def handle_subpocket_naming(subpocket_names, subpockets):
-    if (subpocket_names is not None and
-            len(subpocket_names) != len(subpockets)):
-        print(' - Warning: length of subpocket_names does not match ' +
-              'with length of subpockets, custom names are ignored.')
+def handle_subpocket_naming(subpocket_names: Optional[List[str]],
+                            subpockets: List[Subpocket]
+                            ) -> List[str]:
+    if (subpocket_names is not None
+            and len(subpocket_names) != len(subpockets)):
+        print(' - Warning: length of subpocket_names does not match '
+              + 'with length of subpockets, custom names are ignored.')
         subpocket_names = None
 
     if (subpocket_names is None):
@@ -160,7 +186,10 @@ def handle_subpocket_naming(subpocket_names, subpockets):
     return subpocket_names
 
 
-def account_for_rejected_intersections(report_df, report_path, subpockets):
+def account_for_rejected_intersections(report_df: pd.DataFrame,
+                                       report_path: Path,
+                                       subpockets: List[Subpocket]
+                                       ) -> pd.DataFrame:
     metrics = extract_metrics((report_path, ), (3, ))[0]
 
     new_report_df = pd.DataFrame()
@@ -178,10 +207,11 @@ def account_for_rejected_intersections(report_df, report_path, subpockets):
 
 def main():
     # Parse args
-    PELE_sim_paths, lig_resname, topology_relative_path, report_name, \
-        subpockets_residues, subpocket_names, subpocket_radii, \
-        probe_atom_name, proc_number, output_name, PELE_output_path, \
-        include_rejected_steps, alternative_output_path = parse_args()
+    PELE_sim_paths, lig_resname, topology_relative_path, \
+        template_relative_path, report_name, subpockets_residues, \
+        subpocket_names, subpocket_radii, probe_atom_name, proc_number, \
+        output_name, PELE_output_path, include_rejected_steps, \
+        alternative_output_path = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -191,23 +221,25 @@ def main():
 
     print(' - The following subpockets will be analyzed:')
     for i, subpocket_residues in enumerate(subpockets_residues):
-        if (subpocket_names is not None and
-                len(subpocket_names) == len(subpockets_residues)):
+        if (subpocket_names is not None
+                and len(subpocket_names) == len(subpockets_residues)):
             print('   - {}: {}'.format(subpocket_names[i], subpocket_residues))
         else:
             print('   - {}: {}'.format('S{}'.format(i + 1),
-                  subpocket_residues))
+                                       subpocket_residues))
 
     for PELE_sim_path in all_sim_it:
         print('')
         print(' - Analyzing {}'.format(PELE_sim_path))
 
         topology_path = PELE_sim_path.joinpath(topology_relative_path)
+        template_path = PELE_sim_path.joinpath(template_relative_path,
+                                               lig_resname.lower() + 'z')
 
-        if (not topology_path.is_file()):
-            print(' - Skipping simulation because topology file with ' +
-                  'connectivity was missing')
+        if not file_check(topology_path, template_path):
             continue
+
+        ligand_template = ImpactTemplate(str(template_path))
 
         subpockets = get_simulation_subpockets(subpockets_residues,
                                                subpocket_radii, topology_path)
@@ -225,18 +257,22 @@ def main():
 
         # Subpocket analysis
         parallel_function = partial(subpocket_analysis, PELE_sim_path,
-                                    subpockets, topology_path, lig_resname)
+                                    subpockets, topology_path, lig_resname,
+                                    ligand_template)
 
         print('   - Subpocket analysis')
         with Pool(proc_number) as pool:
             results = pool.map(parallel_function, trajectories)
 
         data = build_dataframe_from_results(
-            results, ['simulation', 'epoch', 'trajectory', 'model'] +
-            [j for i in zip(
+            results, ['simulation', 'epoch', 'trajectory', 'model']
+            + [j for i in zip(
                 ["{}_centroid".format(i) for i in subpocket_names],
                 ["{}_volume".format(i) for i in subpocket_names],
-                ["{}_intersection".format(i) for i in subpocket_names]
+                ["{}_intersection".format(i) for i in subpocket_names],
+                ["{}_nonpolar_intersection".format(i)
+                 for i in subpocket_names],
+                ["{}_net_charge".format(i) for i in subpocket_names]
             ) for j in i])
 
         if (include_rejected_steps):
@@ -246,8 +282,8 @@ def main():
                 for report in reports:
                     epoch = int(report.parent.name)
                     trajectory = int(''.join(filter(str.isdigit, report.name)))
-                    report_csv = data[(data['epoch'] == epoch) &
-                                      (data['trajectory'] == trajectory)]
+                    report_csv = data[(data['epoch'] == epoch)
+                                      & (data['trajectory'] == trajectory)]
                     r = pool.apply(account_for_rejected_intersections,
                                    (report_csv, report, subpockets))
                     results.append(r)
