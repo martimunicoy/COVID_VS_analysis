@@ -66,15 +66,15 @@ def main():
     columns = []
     for PELE_sim_path in all_sim_it:
         if (not PELE_sim_path.joinpath(csv_file_name).is_file()):
-            print(' - Skipping simulation because subpockets csv file ' +
-                  'was missing')
+            print(' - Skipping simulation because subpockets csv file '
+                  + 'was missing')
             continue
 
         data = pd.read_csv(PELE_sim_path.joinpath(csv_file_name))
         data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
 
         for col in data.columns:
-            if ('_intersection' in col):
+            if ('_intersection' in col and 'nonpolar' not in col):
                 if (col not in columns):
                     columns.append(col)
 
@@ -83,8 +83,8 @@ def main():
         print('     - {}'.format(col.strip('_intersection')))
 
     if (len(columns) == 0):
-        raise ValueError('No subpocket intersections were found in the ' +
-                         'simulation paths that were supplied')
+        raise ValueError('No subpocket intersections were found in the '
+                         + 'simulation paths that were supplied')
 
     fig, axs = plt.subplots(len(columns), 1, figsize=(20, 15))
     fig.suptitle('Subpocket-LIG volume intersection')
@@ -100,8 +100,8 @@ def main():
         print(' - Reading data from {}'.format(PELE_sim_path))
 
         if (not PELE_sim_path.joinpath(csv_file_name).is_file()):
-            print(' - Skipping simulation because intersection csv file ' +
-                  'is missing')
+            print(' - Skipping simulation because intersection csv file '
+                  + 'is missing')
             continue
 
         print('   - Retrieving subpocket intersections')
@@ -113,9 +113,9 @@ def main():
             metrics.append(np.percentile(values, percentile))
 
         subpocket_results = pd.concat([subpocket_results,
-                                      pd.DataFrame([metrics],
-                                                   columns=['path', ] +
-                                                   columns)])
+                                       pd.DataFrame([metrics],
+                                                    columns=['path', ]
+                                                    + columns)])
 
     print(' - Retrieving IC50 values')
     ic50 = pd.read_csv(ic50_csv)
@@ -125,8 +125,8 @@ def main():
         subpocket_results.loc[:, 'IC50'] / 1000000)
 
     fig, axs = plt.subplots(int(len(columns) / 2) + len(columns) % 2, 2,
-                            figsize=(15, 5 * int(len(columns) / 2 +
-                                     len(columns) % 2)))
+                            figsize=(15, 5 * int(len(columns) / 2
+                                                 + len(columns) % 2)))
     fig.suptitle('Subpocket occupancy vs -pIC50')
 
     X_all = subpocket_results.loc[:, columns].values
@@ -166,7 +166,7 @@ def main():
         ax.autoscale(tight=False)
 
         handles = [mpl_patches.Rectangle((0, 0), 1, 1, fc="white", ec="white",
-                   lw=0, alpha=0)]
+                                         lw=0, alpha=0)]
 
         score = "r2 = {:.3f}".format(skmetrics.r2_score(x_array, y_pred))
         labels = []
@@ -178,7 +178,7 @@ def main():
 
     # Empty unpaired axis
     if (i % 2 == 0):
-            fig.delaxes(axs[int(i / 2)][1])
+        fig.delaxes(axs[int(i / 2)][1])
 
     plt.tight_layout(rect=(0, 0, 1, 0.97))
     plt.savefig('subpocket_correlations.png')
