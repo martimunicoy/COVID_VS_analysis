@@ -145,10 +145,24 @@ class Subpocket(object):
                 self.fixed_radius = float(radius)
             except ValueError:
                 raise ValueError('Wrong subpocket radius')
+        self._ligand_atoms = []  # type: list
 
     @property
     def list_of_residues(self) -> List[Residue]:
         return self._list_of_residues
+
+    @property
+    def ligand_atoms(self) -> list:
+        return self._ligand_atoms
+
+    def set_ligand_atoms(self, topology: md.Trajectory, lig_resname: str):
+        snapshot = md.load(str(topology))
+
+        self._ligand_atoms = []
+        atom_ids = snapshot.top.select('resname {}'.format(lig_resname))
+        for atom_id in atom_ids:
+            atom = snapshot.top.atom(atom_id)
+            self._ligand_atoms.append(atom)
 
     def get_residue_coords(self, snapshot: md.Trajectory) -> np.array:
         coords = []
@@ -252,17 +266,13 @@ class Subpocket(object):
         return np.sum(list(intersections.values()))
 
     def get_nonpolar_intersection(self, intersections: Dict[str, float],
-                                  snapshot: md.Trajectory,
                                   impact_template: ImpactTemplate,
-                                  ligand_resname: str,
                                   ) -> float:
         nonpolar_intersection = float(0)
-        for atom_name, intersection in intersections.items():
-            sel = snapshot.topology.select('resname {} and name {}'.format(
-                ligand_resname, atom_name))
-
-            element = snapshot.top.atom(sel[0]).element.name
-            charge = impact_template.get_parameter_by_name(atom_name, 'charge')
+        for atom in self.ligand_atoms:
+            intersection = intersections[atom.name]
+            element = atom.element.name
+            charge = impact_template.get_parameter_by_name(atom.name, 'charge')
 
             if ((element == 'carbon' or element == 'hydrogen')
                     and (charge <= 0.2)):
@@ -271,19 +281,16 @@ class Subpocket(object):
         return nonpolar_intersection
 
     def get_net_charge(self, intersections: Dict[str, float],
-                       snapshot: md.Trajectory,
                        impact_template: ImpactTemplate,
-                       ligand_resname: str,
                        ) -> float:
         net_charge = float(0)
-        for atom_name, intersection in intersections.items():
-            sel = snapshot.topology.select('resname {} and name {}'.format(
-                ligand_resname, atom_name))
+        for atom in self.ligand_atoms:
+            intersection = intersections[atom.name]
 
             # Radius in angstroms
-            radius = snapshot.top.atom(sel[0]).element.radius * 10
+            radius = atom.element.radius * 10
             volume = FOUR_THIRDS_PI * np.power(radius, 3)
-            charge = impact_template.get_parameter_by_name(atom_name, 'charge')
+            charge = impact_template.get_parameter_by_name(atom.name, 'charge')
 
             net_charge += charge * intersection / volume
 
@@ -302,12 +309,10 @@ class Subpocket(object):
                                                centroid, radius)
 
         np_intersection = self.get_nonpolar_intersection(intersections,
-                                                         snapshot,
-                                                         impact_template,
-                                                         ligand_resname)
+                                                         impact_template)
 
-        net_charge = self.get_net_charge(intersections, snapshot,
-                                         impact_template, ligand_resname)
+        net_charge = self.get_net_charge(intersections,
+                                         impact_template)
 
         return centroid, FOUR_THIRDS_PI * np.power(radius, 3), \
             np.sum(list(intersections.values())), np_intersection, net_charge

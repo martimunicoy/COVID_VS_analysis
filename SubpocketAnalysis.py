@@ -244,6 +244,9 @@ def main():
         subpockets = get_simulation_subpockets(subpockets_residues,
                                                subpocket_radii, topology_path)
 
+        for subpocket in subpockets:
+            subpocket.set_ligand_atoms(topology_path, lig_resname)
+
         # Build PELE iterables
         sim_it = SimIt(PELE_sim_path)
         sim_it.build_traj_it(PELE_output_path, 'trajectory', 'xtc')
