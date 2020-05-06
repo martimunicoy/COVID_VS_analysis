@@ -187,7 +187,8 @@ def make_plot(all_sim_it: SimIt, csv_file_name: str, ic50_csv: str,
               max_steps: Optional[List[float]],
               output_name: str):
     fig, ax = plt.subplots()
-    fig.suptitle('Subpocket-pIC50 correlations vs simulation length')
+    fig.suptitle('Subpocket-pIC50 correlations with {}'.format(percentile)
+                 + '-percentile vs simulation length')
 
     ax.set_axisbelow(True)
     ax.grid(True, color='white')
