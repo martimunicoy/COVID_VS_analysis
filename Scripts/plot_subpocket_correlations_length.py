@@ -124,8 +124,7 @@ def extract_subpocket_results(all_sim_it: SimIt, csv_file_name: str,
                                                   int(length_try
                                                       * len(all_trajs)),
                                                   replace=False)
-                f_data = data[subpocket_results['trajectory'].isin(
-                    selected_trajs)]
+                f_data = data[data['trajectory'].isin(selected_trajs)]
             else:
                 raise ValueError(
                     'Invalid length type value: {}'.format(length_type))
