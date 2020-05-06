@@ -33,11 +33,11 @@ def p_extract_metrics(cols, report_path):
                     results.append(metrics)
 
         except IndexError:
-            print(' - p_extract_ligand_metric Warning: wrong index ' +
-                  'supplied for trajectory: \'{}\''.format(report_path))
+            print(' - p_extract_ligand_metric Warning: wrong index '
+                  + 'supplied for trajectory: \'{}\''.format(report_path))
     else:
-        print(' - p_extract_ligand_metric Warning: wrong path to report ' +
-              'for trajectory: \'{}\''.format(report_path))
+        print(' - p_extract_ligand_metric Warning: wrong path to report '
+              + 'for trajectory: \'{}\''.format(report_path))
 
     return results
 
