@@ -65,10 +65,15 @@ def parse_args() -> Tuple[List[str], str, str, float, str,
                         help="Maximum number of PELE steps to use in the plot",
                         default=None, nargs='*')
 
+    parser.add_argument('-o', '--output', metavar='STR', type=str,
+                        default='subpocket_correlations_length.png',
+                        help='Output name for the resulting plot')
+
     args = parser.parse_args()
 
     return args.traj_paths, args.subpockets, args.ic50, args.percentile, \
-        args.length_type, args.trajectories_fraction, args.maximum_steps
+        args.length_type, args.trajectories_fraction, args.maximum_steps, \
+        args.output
 
 
 def get_columns(all_sim_it: SimIt, csv_file_name: str) -> list:
@@ -180,7 +185,8 @@ def apply_filtering(data: pd.DataFrame, traj_fraction: float,
 def make_plot(all_sim_it: SimIt, csv_file_name: str, ic50_csv: str,
               columns: list, percentile: float, length_type: str,
               traj_fraction: Optional[List[float]],
-              max_steps: Optional[List[float]]):
+              max_steps: Optional[List[float]],
+              output_name: str):
     fig, ax = plt.subplots()
     fig.suptitle('Subpocket-pIC50 correlations vs simulation length')
 
@@ -233,91 +239,14 @@ def make_plot(all_sim_it: SimIt, csv_file_name: str, ic50_csv: str,
               fancybox=True, markerscale=2)
 
     plt.tight_layout(rect=(0, 0, 0.95, 0.94))
-    plt.show()
-
-    return
-
-    """
-        subpocket_results = add_ic50s(subpocket_results, ic50_csv)
-
-        Y = subpocket_results.loc[:, columns].to_numpy()
-        x = subpocket_results['pIC50'].to_numpy()
-
-        current_results = ()
-        for y in Y.transpose():
-            lin_reg = LinearRegression().fit(y.reshape(-1, 1),
-                                             x.reshape(-1, 1))
-            x_pred = lin_reg.predict(y.reshape(-1, 1))
-
-            current_results += (r2_score(x, x_pred), )
-
-        results.append(current_results)
-
-    print(results)
-
-    #ax.plot(r, y)
-
-    # plt.show()
-    # for col in columns:
-    """
-    """
-    for i, col in enumerate(columns):
-        ax.set_title(col.strip('_intersection'))
-        ax.set_ylabel('{}-percentile of {} occupancies'.format(
-            percentile, col.strip('_intersection')))
-        ax.set_xlabel('-pIC50')
-
-        x_array = np.array([X[i] for X in X_all])
-        ax.plot(y_all, x_array, ls='', c='r', marker='x')
-
-        ax.set_axisbelow(True)
-        ax.grid(True, color='white')
-        ax.set_facecolor('lightgray')
-
-        lin_reg = LinearRegression()
-        lin_reg.fit(y_all.reshape(-1, 1), x_array.reshape(-1, 1))
-        y_pred = lin_reg.predict(y_all.reshape(-1, 1))
-        for x, xp, y, path in zip(x_array, y_pred, y_all,
-                                  subpocket_results['path'].values):
-            if (xp == min(y_pred)):
-                min_y = y
-            if (xp == max(y_pred)):
-                max_y = y
-
-            ax.annotate(path,
-                        (y, x),
-                        textcoords="offset points",
-                        xytext=(0, 10),
-                        ha='center')
-
-        ax.plot((min_y, max_y), (min(y_pred), max(y_pred)), 'k--', linewidth=1)
-        ax.autoscale(tight=False)
-
-        handles = [mpl_patches.Rectangle((0, 0), 1, 1, fc="white", ec="white",
-                                         lw=0, alpha=0)]
-
-        score = "r2 = {:.3f}".format(skmetrics.r2_score(x_array, y_pred))
-        labels = []
-        labels.append(score)
-
-        ax.legend(handles, labels, loc='best', fontsize='small',
-                  fancybox=True, framealpha=0.7,
-                  handlelength=0, handletextpad=0)
-
-    # Empty unpaired axis
-    if (i % 2 == 0):
-        fig.delaxes(axs[int(i / 2)][1])
-
-    plt.tight_layout(rect=(0, 0, 1, 0.97))
-    plt.savefig('subpocket_correlations.png')
+    plt.savefig(output_name)
     plt.close()
-    """
 
 
 def main():
     # Parse args
     PELE_sim_paths, csv_file_name, ic50_csv, percentile, length_type, \
-        traj_fraction, max_steps = parse_args()
+        traj_fraction, max_steps, output_name = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -336,7 +265,7 @@ def main():
                          + 'simulation paths that were supplied')
 
     make_plot(all_sim_it, csv_file_name, ic50_csv, columns, percentile,
-              length_type, traj_fraction, max_steps)
+              length_type, traj_fraction, max_steps, output_name)
 
 
 if __name__ == "__main__":
