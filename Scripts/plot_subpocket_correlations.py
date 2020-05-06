@@ -5,6 +5,7 @@
 import argparse as ap
 import os
 import sys
+from typing import Tuple, List, Optional
 
 # External imports
 import pandas as pd
@@ -28,7 +29,7 @@ __maintainer__ = "Marti Municoy"
 __email__ = "marti.municoy@bsc.es"
 
 
-def parse_args():
+def parse_args() -> Tuple[List[str], str, str, float, float, Optional[int]]:
     parser = ap.ArgumentParser()
 
     parser.add_argument("traj_paths", metavar="PATH", type=str,
@@ -44,18 +45,53 @@ def parse_args():
                         default='ic50.csv')
 
     parser.add_argument("-p", "--percentile", metavar="FLOAT", type=float,
-                        help="Percentile applied to the set of " +
-                        "intersections that are obtained for each subpocket",
+                        help="Percentile applied to the set of "
+                        + "intersections that are obtained for each subpocket",
                         default=95)
+
+    parser.add_argument('--trajectories_fraction', metavar="FLOAT", type=float,
+                        help="Fraction of trajectories to use in the plot",
+                        default=1)
+
+    parser.add_argument('--maximum_steps', metavar="INT", type=int,
+                        help="Maximum number of PELE steps to use in the plot",
+                        default=None)
 
     args = parser.parse_args()
 
-    return args.traj_paths, args.subpockets, args.ic50, args.percentile
+    return args.traj_paths, args.subpockets, args.ic50, args.percentile, \
+        args.trajectories_fraction, args.maximum_steps
+
+
+def apply_filtering(data: pd.DataFrame, traj_fraction: float,
+                    max_steps: Optional[int]) -> pd.DataFrame:
+    if max_steps is not None:
+        print('   - Filtering by maximum step threshold ({})'.format(
+            max_steps))
+        new_data = data[data['model'] < max_steps]
+        print('     - {} entries were filtered to {}'.format(len(data),
+                                                             len(new_data)))
+        data = new_data
+
+    if traj_fraction < 1:
+        print('   - Filtering by trajectories fraction threshold ({})'.format(
+            traj_fraction))
+        all_trajs = list(set(data['trajectory'].to_numpy()))
+        selected_trajs = np.random.choice(all_trajs,
+                                          int(traj_fraction * len(all_trajs)),
+                                          replace=False)
+        new_data = data[data['trajectory'].isin(selected_trajs)]
+        print('     - {} entries were filtered to {}'.format(len(data),
+                                                             len(new_data)))
+        data = new_data
+
+    return data
 
 
 def main():
     # Parse args
-    PELE_sim_paths, csv_file_name, ic50_csv, percentile = parse_args()
+    PELE_sim_paths, csv_file_name, ic50_csv, percentile, traj_fraction, \
+        max_steps = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -78,9 +114,9 @@ def main():
                 if (col not in columns):
                     columns.append(col)
 
-    print('   - Subpockets found:')
+    print(' - Subpockets found:')
     for col in columns:
-        print('     - {}'.format(col.strip('_intersection')))
+        print('   - {}'.format(col.strip('_intersection')))
 
     if (len(columns) == 0):
         raise ValueError('No subpocket intersections were found in the '
@@ -116,6 +152,8 @@ def main():
                                        pd.DataFrame([metrics],
                                                     columns=['path', ]
                                                     + columns)])
+
+        data = apply_filtering(data, traj_fraction, max_steps)
 
     print(' - Retrieving IC50 values')
     ic50 = pd.read_csv(ic50_csv)
