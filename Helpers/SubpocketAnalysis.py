@@ -280,10 +280,12 @@ class Subpocket(object):
 
         return nonpolar_intersection
 
-    def get_net_charge(self, intersections: Dict[str, float],
-                       impact_template: ImpactTemplate,
-                       ) -> float:
+    def get_charge(self, intersections: Dict[str, float],
+                   impact_template: ImpactTemplate,
+                   ) -> Tuple[float, float, float]:
         net_charge = float(0)
+        positive_charge = float(0)
+        negative_charge = float(0)
         for atom in self.ligand_atoms:
             intersection = intersections[atom.name]
 
@@ -291,15 +293,21 @@ class Subpocket(object):
             radius = atom.element.radius * 10
             volume = FOUR_THIRDS_PI * np.power(radius, 3)
             charge = impact_template.get_parameter_by_name(atom.name, 'charge')
+            norm_charge = charge * intersection / volume
 
-            net_charge += charge * intersection / volume
+            net_charge += norm_charge
 
-        return net_charge
+            if norm_charge > 0:
+                positive_charge += norm_charge
+            elif norm_charge < 0:
+                negative_charge += norm_charge
+
+        return net_charge, positive_charge, negative_charge
 
     def full_characterize(self, snapshot: md.Trajectory, ligand_resname: str,
                           impact_template: ImpactTemplate
                           ) -> Tuple[Point, float, Dict[str, float], float,
-                                     float]:
+                                     float, float, float]:
         if (self.fixed_radius is None):
             radius, centroid = self.get_default_radius(snapshot)
         else:
@@ -311,11 +319,12 @@ class Subpocket(object):
         np_intersection = self.get_nonpolar_intersection(intersections,
                                                          impact_template)
 
-        net_charge = self.get_net_charge(intersections,
-                                         impact_template)
+        net_charge, positive_charge, negative_charge = self.get_charge(
+            intersections, impact_template)
 
         return centroid, FOUR_THIRDS_PI * np.power(radius, 3), \
-            np.sum(list(intersections.values())), np_intersection, net_charge
+            np.sum(list(intersections.values())), np_intersection, \
+            net_charge, positive_charge, negative_charge
 
 
 def build_residues(residues_list: List[Tuple[Union[str, int], int]],

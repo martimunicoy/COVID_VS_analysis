@@ -132,11 +132,13 @@ def subpocket_analysis(sim_path: Path, subpockets: list, topology_path: Path,
                  i)  # type: Tuple
         for subpocket in subpockets:
             centroid, volume, intersection, nonpolar_intersection, \
-                net_charge = subpocket.full_characterize(snapshot,
-                                                         lig_resname,
-                                                         lig_template)
+                net_charge, positive_charge, negative_charge = \
+                subpocket.full_characterize(snapshot,
+                                            lig_resname,
+                                            lig_template)
             entry = (entry + (centroid, volume, intersection,
-                              nonpolar_intersection, net_charge))
+                              nonpolar_intersection, net_charge,
+                              positive_charge, negative_charge))
 
         results.append(entry)
 
@@ -275,7 +277,9 @@ def main():
                 ["{}_intersection".format(i) for i in subpocket_names],
                 ["{}_nonpolar_intersection".format(i)
                  for i in subpocket_names],
-                ["{}_net_charge".format(i) for i in subpocket_names]
+                ["{}_net_charge".format(i) for i in subpocket_names],
+                ["{}_positive_charge".format(i) for i in subpocket_names],
+                ["{}_negative_charge".format(i) for i in subpocket_names]
             ) for j in i])
 
         if (include_rejected_steps):
