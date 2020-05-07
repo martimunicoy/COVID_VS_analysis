@@ -30,7 +30,7 @@ __email__ = "marti.municoy@bsc.es"
 
 
 def parse_args() -> Tuple[List[str], str, str, float, str,
-                          Optional[List[float]], Optional[List[int]]]:
+                          Optional[List[int]], Optional[List[int]]]:
     parser = ap.ArgumentParser()
 
     parser.add_argument("traj_paths", metavar="PATH", type=str,
@@ -52,14 +52,14 @@ def parse_args() -> Tuple[List[str], str, str, float, str,
 
     parser.add_argument('-t', '--length_type', default='maximum_steps',
                         nargs='?', type=str,
-                        choices=['maximum_steps', 'trajectories_fraction'],
+                        choices=['maximum_steps', 'maximum_trajectories'],
                         help='Type of simulation length to evaluate: '
-                        + 'maximum_steps or trajectories_fraction. '
+                        + 'maximum_steps or maximum_trajectories. '
                         + 'Default: maximum_steps')
 
-    parser.add_argument('--trajectories_fraction', metavar="FLOAT", type=float,
-                        help="Fraction of trajectories to use in the plot",
-                        default=None, nargs='*')
+    parser.add_argument('--maximum_trajectories', metavar="INT", type=int,
+                        help="Maximum number of PELE trajectories to use in "
+                        + "the plot", default=None, nargs='*')
 
     parser.add_argument('--maximum_steps', metavar="INT", type=int,
                         help="Maximum number of PELE steps to use in the plot",
@@ -72,7 +72,7 @@ def parse_args() -> Tuple[List[str], str, str, float, str,
     args = parser.parse_args()
 
     return args.traj_paths, args.subpockets, args.ic50, args.percentile, \
-        args.length_type, args.trajectories_fraction, args.maximum_steps, \
+        args.length_type, args.maximum_trajectories, args.maximum_steps, \
         args.output
 
 
@@ -102,6 +102,15 @@ def extract_subpocket_results(all_sim_it: SimIt, csv_file_name: str,
                               ) -> pd.DataFrame:
     subpocket_results = pd.DataFrame()
 
+    if length_type == 'maximum_steps':
+        key = 'step'
+        offset = 0
+    elif length_type == 'maximum_trajectories':
+        key = 'trajectory'
+        offset = 1
+    else:
+        raise ValueError('Invalid length type value: {}'.format(length_type))
+
     for PELE_sim_path in all_sim_it:
         print('')
         print(' - Reading data from {}'.format(PELE_sim_path))
@@ -116,19 +125,9 @@ def extract_subpocket_results(all_sim_it: SimIt, csv_file_name: str,
 
         for length_try in length_iterator:
             # Filtering data frame
-            if length_type == 'maximum_steps':
-                f_data = data[data['model'] < length_try]
-            elif length_type == 'trajectories_fraction':
-                all_trajs = list(set(data['trajectory'].to_numpy()))
-                selected_trajs = np.random.choice(all_trajs,
-                                                  int(length_try
-                                                      * len(all_trajs)),
-                                                  replace=False)
-                f_data = data[data['trajectory'].isin(selected_trajs)]
-            else:
-                raise ValueError(
-                    'Invalid length type value: {}'.format(length_type))
+            f_data = data[data[key] < length_try + offset]
 
+            # Retrieving subpocket results
             metrics = [PELE_sim_path.name, length_try]
             for col in columns:
                 values = f_data[col].values
@@ -156,35 +155,10 @@ def add_ic50s(subpocket_results: pd.DataFrame, ic50_csv: str
     return subpocket_results
 
 
-def apply_filtering(data: pd.DataFrame, traj_fraction: float,
-                    max_steps: Optional[int]) -> pd.DataFrame:
-    if max_steps is not None:
-        print('   - Filtering by maximum step threshold ({})'.format(
-            max_steps))
-        new_data = data[data['model'] < max_steps]
-        print('     - {} entries were filtered to {}'.format(len(data),
-                                                             len(new_data)))
-        data = new_data
-
-    if traj_fraction < 1:
-        print('   - Filtering by trajectories fraction threshold ({})'.format(
-            traj_fraction))
-        all_trajs = list(set(data['trajectory'].to_numpy()))
-        selected_trajs = np.random.choice(all_trajs,
-                                          int(traj_fraction * len(all_trajs)),
-                                          replace=False)
-        new_data = data[data['trajectory'].isin(selected_trajs)]
-        print('     - {} entries were filtered to {}'.format(len(data),
-                                                             len(new_data)))
-        data = new_data
-
-    return data
-
-
 def make_plot(all_sim_it: SimIt, csv_file_name: str, ic50_csv: str,
               columns: list, percentile: float, length_type: str,
-              traj_fraction: Optional[List[float]],
-              max_steps: Optional[List[float]],
+              max_trajs: Optional[List[int]],
+              max_steps: Optional[List[int]],
               output_name: str):
     fig, ax = plt.subplots()
     fig.suptitle('Subpocket-pIC50 correlations with {}'.format(percentile)
@@ -196,8 +170,8 @@ def make_plot(all_sim_it: SimIt, csv_file_name: str, ic50_csv: str,
 
     if length_type == 'maximum_steps':
         length_iterator = max_steps
-    elif length_type == 'trajectories_fraction':
-        length_iterator = traj_fraction
+    elif length_type == 'maximum_trajectories':
+        length_iterator = max_trajs
     else:
         raise ValueError('Invalid length type value: {}'.format(length_type))
 
@@ -235,8 +209,8 @@ def make_plot(all_sim_it: SimIt, csv_file_name: str, ic50_csv: str,
         length_type.replace('_', ' ')))
     ax.set_ylabel('r2 score')
 
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15), ncol=len(columns),
-              fancybox=True, markerscale=2)
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.15),
+              ncol=len(columns), fancybox=True, markerscale=2)
 
     plt.tight_layout(rect=(0, 0, 0.95, 0.94))
     plt.savefig(output_name)
@@ -246,7 +220,7 @@ def make_plot(all_sim_it: SimIt, csv_file_name: str, ic50_csv: str,
 def main():
     # Parse args
     PELE_sim_paths, csv_file_name, ic50_csv, percentile, length_type, \
-        traj_fraction, max_steps, output_name = parse_args()
+        max_trajs, max_steps, output_name = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -265,7 +239,7 @@ def main():
                          + 'simulation paths that were supplied')
 
     make_plot(all_sim_it, csv_file_name, ic50_csv, columns, percentile,
-              length_type, traj_fraction, max_steps, output_name)
+              length_type, max_trajs, max_steps, output_name)
 
 
 if __name__ == "__main__":
