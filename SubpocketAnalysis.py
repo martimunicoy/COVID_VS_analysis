@@ -188,21 +188,29 @@ def handle_subpocket_naming(subpocket_names: Optional[List[str]],
     return subpocket_names
 
 
-def account_for_rejected_intersections(report_df: pd.DataFrame,
-                                       report_path: Path,
-                                       subpockets: List[Subpocket]
-                                       ) -> pd.DataFrame:
-    metrics = extract_metrics((report_path, ), (3, ))[0]
+def add_steps(report_df: pd.DataFrame, report_path: Path,
+              subpockets: List[Subpocket],
+              include_rejected_steps: bool) -> pd.DataFrame:
+    metrics = extract_metrics((report_path, ), (2, 3))[0]
 
     new_report_df = pd.DataFrame()
 
+    total_steps = []
     accepted_steps = []
-    for m in metrics:
-        accepted_steps.append(int(m[0]))
+    for t_s, a_s in metrics:
+        total_steps.append(int(t_s))
+        accepted_steps.append(int(a_s))
 
-    for a_s in accepted_steps:
-        row = report_df[report_df['model'] == a_s]
-        new_report_df = pd.concat([new_report_df, row])
+    if include_rejected_steps:
+        for t_s, a_s in zip(total_steps, accepted_steps):
+            row = report_df[report_df['model'] == a_s]
+            row.insert(4, 'step', t_s)
+            new_report_df = pd.concat([new_report_df, row])
+    else:
+        for a_s in set(accepted_steps):
+            row = report_df[report_df['model'] == a_s]
+            row.insert(4, 'step', total_steps[accepted_steps.index(a_s)])
+            new_report_df = pd.concat([new_report_df, row])
 
     return new_report_df
 
@@ -282,20 +290,23 @@ def main():
                 ["{}_negative_charge".format(i) for i in subpocket_names]
             ) for j in i])
 
-        if (include_rejected_steps):
-            print('   - Considering intersections for rejected steps')
-            with Pool(proc_number) as pool:
-                results = []
-                for report in reports:
-                    epoch = int(report.parent.name)
-                    trajectory = int(''.join(filter(str.isdigit, report.name)))
-                    report_csv = data[(data['epoch'] == epoch)
-                                      & (data['trajectory'] == trajectory)]
-                    r = pool.apply(account_for_rejected_intersections,
-                                   (report_csv, report, subpockets))
-                    results.append(r)
+        with Pool(proc_number) as pool:
+            results = []
+            for report in reports:
+                epoch = int(report.parent.name)
+                trajectory = int(''.join(filter(str.isdigit, report.name)))
+                report_csv = data[(data['epoch'] == epoch)
+                                  & (data['trajectory'] == trajectory)]
+                r = pool.apply(add_steps,
+                               (report_csv, report, subpockets,
+                                include_rejected_steps))
+                results.append(r)
 
             data = pd.concat(results)
+
+        print(data)
+        print(data.loc[:, ['simulation', 'epoch', 'trajectory', 'model',
+                           'step']])
 
         if (alternative_output_path is not None):
             output_path = Path(alternative_output_path)
