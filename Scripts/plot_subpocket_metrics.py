@@ -41,14 +41,20 @@ def parse_args():
                         help="IC50 csv file name",
                         default=None)
 
+    parser.add_argument('-m', '--metric', default='intersection',
+                        nargs='?', type=str,
+                        choices=['intersection', 'nonpolar_intersection',
+                                 'positive_charge', 'negative_charge'],
+                        help='Metric whose distribution will be plotted')
+
     args = parser.parse_args()
 
-    return args.traj_paths, args.subpockets, args.ic50
+    return args.traj_paths, args.subpockets, args.ic50, args.metric
 
 
 def main():
     # Parse args
-    PELE_sim_paths, csv_file_name, ic50_csv = parse_args()
+    PELE_sim_paths, csv_file_name, ic50_csv, metric = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -67,38 +73,49 @@ def main():
         data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
 
         for col in data.columns:
-            if ('_intersection' in col and 'nonpolar' not in col):
+            if (col.endswith(metric)):
+                if (metric == 'intersection'
+                        and col.endswith('nonpolar_intersection')):
+                    continue
                 if (col not in columns):
                     columns.append(col)
 
+    pretty_metric = metric.replace('_', ' ')
+    if metric == 'intersection' or metric == 'nonpolar_intersection':
+        pretty_metric = 'volume ' + pretty_metric
+        units = '$\AA^3$'
+    else:
+        units = 'a.u.'
+
     print('   - Subpockets found:')
     for col in columns:
-        print('     - {}'.format(col.strip('_intersection')))
+        print('     - {}'.format(col.strip('_' + metric)))
 
     if (len(columns) == 0):
-        raise ValueError('No subpocket intersections were found in the '
-                         + 'simulation paths that were supplied')
+        raise ValueError('No subpocket {} '.format(pretty_metric)
+                         + 'were found in the simulation paths that '
+                         + 'were supplied')
 
     fig, axs = plt.subplots(len(columns), 1, figsize=(20, 15))
-    fig.suptitle('Subpocket-LIG volume intersection')
+    fig.suptitle('Subpocket-LIG {}'.format(pretty_metric))
 
     for i, col in enumerate(columns):
-        axs[i].set_title(col.strip('_intersection'))
-        axs[i].set_ylabel('{}-LIG volume intersection ($\AA^3$)'.format(
-            col.strip('_intersection')))
+        axs[i].set_title(col.strip('_' + metric))
+        axs[i].set_ylabel('{}-LIG {} ({})'.format(
+            pretty_metric, col.strip('_' + metric), units))
 
-    intersects = defaultdict(dict)
+    metrics = defaultdict(dict)
     for PELE_sim_path in all_sim_it:
 
         if (not PELE_sim_path.joinpath(csv_file_name).is_file()):
-            print(' - Skipping simulation because intersection csv file '
-                  + 'is missing')
+            print(' - Skipping simulation because '
+                  + '{} csv file is missing'.format(pretty_metric))
             continue
 
         data = pd.read_csv(PELE_sim_path.joinpath(csv_file_name))
 
         for i, col in enumerate(columns):
-            intersects[col][PELE_sim_path.name] = data[col].to_numpy()
+            metrics[col][PELE_sim_path.name] = data[col].to_numpy()
 
     try:
         if (ic50_csv is None):
@@ -112,8 +129,8 @@ def main():
             ordered_intersects = []
             ordered_labels = []
             for path, pic50 in zip(ic50_data['path'], ic50_data['-pIC50']):
-                if (path in intersects[col]):
-                    ordered_intersects.append(intersects[col][path])
+                if (path in metrics[col]):
+                    ordered_intersects.append(metrics[col][path])
                     ordered_labels.append(path)
 
             axs[i].boxplot(ordered_intersects,
@@ -123,9 +140,9 @@ def main():
     except ValueError:
         print(' - Unordered plot')
         for i, col in enumerate(columns):
-            axs[i].boxplot(list(intersects[col].values()),
+            axs[i].boxplot(list(metrics[col].values()),
                            labels=[i.split('_')[1] for i in
-                                   list(intersects[col].keys())],
+                                   list(metrics[col].keys())],
                            showfliers=False)
 
     for ax in axs:
@@ -133,7 +150,7 @@ def main():
             tick.set_rotation(90)
 
     plt.tight_layout(h_pad=5, rect=(0, 0.05, 1, 0.95))
-    plt.savefig('subpocket_intersections.png')
+    plt.savefig('subpocket_{}.png'.format(metric))
     plt.close()
 
 
