@@ -305,10 +305,6 @@ def main():
 
             data = pd.concat(results)
 
-        print(data)
-        print(data.loc[:, ['simulation', 'epoch', 'trajectory', 'model',
-                           'step']])
-
         if (alternative_output_path is not None):
             output_path = Path(alternative_output_path)
             output_path = output_path.joinpath(PELE_sim_path.name)
