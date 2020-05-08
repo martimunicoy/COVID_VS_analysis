@@ -202,6 +202,7 @@ def add_steps(report_df: pd.DataFrame, report_path: Path,
         accepted_steps.append(int(a_s))
 
     if include_rejected_steps:
+        print('   - Including rejected steps')
         for t_s, a_s in zip(total_steps, accepted_steps):
             row = report_df[report_df['model'] == a_s]
             row.insert(4, 'step', t_s)
