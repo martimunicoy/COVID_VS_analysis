@@ -300,12 +300,17 @@ def main():
                 trajectory = int(''.join(filter(str.isdigit, report.name)))
                 report_csv = data[(data['epoch'] == epoch)
                                   & (data['trajectory'] == trajectory)]
-                r = pool.apply(add_steps,
-                               (report_csv, report, subpockets,
-                                include_rejected_steps))
+                r = pool.apply_async(add_steps,
+                                     (report_csv, report, subpockets,
+                                      include_rejected_steps))
+
                 results.append(r)
 
-            data = pd.concat(results)
+            g_results = []
+            for r in results:
+                g_results.append(r.get())
+
+        data = pd.concat(g_results)
 
         if (alternative_output_path is not None):
             output_path = Path(alternative_output_path)
