@@ -59,15 +59,15 @@ def main():
     columns = []
     for PELE_sim_path in all_sim_it:
         if (not PELE_sim_path.joinpath(csv_file_name).is_file()):
-            print(' - Skipping simulation because intersections csv file ' +
-                  'was missing')
+            print(' - Skipping simulation because intersections csv file '
+                  + 'was missing')
             continue
 
         data = pd.read_csv(PELE_sim_path.joinpath(csv_file_name))
         data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
 
         for col in data.columns:
-            if ('_intersection' in col):
+            if ('_intersection' in col and 'nonpolar' not in col):
                 if (col not in columns):
                     columns.append(col)
 
@@ -76,8 +76,8 @@ def main():
         print('     - {}'.format(col.strip('_intersection')))
 
     if (len(columns) == 0):
-        raise ValueError('No subpocket intersections were found in the ' +
-                         'simulation paths that were supplied')
+        raise ValueError('No subpocket intersections were found in the '
+                         + 'simulation paths that were supplied')
 
     fig, axs = plt.subplots(len(columns), 1, figsize=(20, 15))
     fig.suptitle('Subpocket-LIG volume intersection')
@@ -91,8 +91,8 @@ def main():
     for PELE_sim_path in all_sim_it:
 
         if (not PELE_sim_path.joinpath(csv_file_name).is_file()):
-            print(' - Skipping simulation because intersection csv file ' +
-                  'is missing')
+            print(' - Skipping simulation because intersection csv file '
+                  + 'is missing')
             continue
 
         data = pd.read_csv(PELE_sim_path.joinpath(csv_file_name))
@@ -125,7 +125,7 @@ def main():
         for i, col in enumerate(columns):
             axs[i].boxplot(list(intersects[col].values()),
                            labels=[i.split('_')[1] for i in
-                           list(intersects[col].keys())],
+                                   list(intersects[col].keys())],
                            showfliers=False)
 
     for ax in axs:
