@@ -38,7 +38,7 @@ def parse_args():
                         default="aromaticity.csv")
 
     parser.add_argument("--alternative_output_path",
-                        metavar="PATH", type=str, default='None',
+                        metavar="PATH", type=str, default=None,
                         help="Alternative path to save output results")
 
     args = parser.parse_args()
@@ -50,7 +50,7 @@ def main():
     lig_paths, output, alternative_output_path = parse_args()
 
     for lig_path in lig_paths:
-        print(' - Analyzing connectivity from {}'.format(lig_path))
+        print(' - Analyzing connectivity of {}'.format(lig_path))
 
         lig_path = Path(lig_path)
         if (not lig_path.is_file()):
@@ -65,13 +65,13 @@ def main():
                          atom.GetPDBResidueInfo().GetName(),
                          atom.GetIsAromatic()))
 
-        df = pd.Dataframe(data, columns=['residue', 'atom', 'aromatic'])
+        df = pd.DataFrame(data, columns=['residue', 'atom', 'aromatic'])
 
         output_path = lig_path.parent
         if (alternative_output_path is not None):
             output_path = Path(alternative_output_path)
 
-        df.to_csv(output_path.join('_'.join((lig_path.name, output))))
+        df.to_csv(output_path.joinpath('_'.join((lig_path.name.strip(lig_path.suffix), output))))
 
 
 if __name__ == "__main__":
