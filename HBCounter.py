@@ -8,14 +8,14 @@ from multiprocessing import Pool
 from functools import partial
 from pathlib import Path
 
-# External imports
-import mdtraj as md
-import pandas as pd
-
-# PELE imports
+# Local imports
 from Helpers.PELEIterator import SimIt
 from Helpers import hbond_mod as hbm
 from Helpers.ReportUtils import extract_metrics
+
+# External imports
+import mdtraj as md
+import pandas as pd
 
 
 # Script information
