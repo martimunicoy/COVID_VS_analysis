@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 
 
@@ -11,6 +10,7 @@ from pathlib import Path
 
 # External imports
 import mdtraj as md
+import pandas as pd
 
 # PELE imports
 from Helpers.PELEIterator import SimIt
@@ -59,7 +59,7 @@ def parse_args():
 
     parser.add_argument("-o", "--output_path",
                         metavar="PATH", type=str,
-                        default='hbonds.out',
+                        default='hbonds.csv',
                         help="Relative path to output file")
 
     parser.add_argument("--PELE_output_path",
@@ -76,7 +76,7 @@ def parse_args():
                         action='store_true')
 
     parser.add_argument("--alternative_output_path",
-                        metavar="PATH", type=str, default='None',
+                        metavar="PATH", type=str, default=None,
                         help="Alternative path to save output results")
 
     parser.set_defaults(include_rejected_steps=False)
@@ -191,8 +191,8 @@ def main():
         topology_path = PELE_sim_path.joinpath(topology_relative_path)
 
         if (not topology_path.is_file()):
-            print(' - Skipping simulation because topology file with ' +
-                  'connectivity was missing')
+            print(' - Skipping simulation because topology file with '
+                  + 'connectivity was missing')
             continue
 
         # Retrieve chain ids
@@ -204,8 +204,6 @@ def main():
                 line = line.strip()
                 chain_ids.add(line[21])
         chain_ids = sorted(list(chain_ids))
-
-        hbonds_dict = {}
 
         parallel_function = partial(find_hbonds_in_trajectory, lig_resname,
                                     distance, angle, pseudo_hb, topology_path,
@@ -226,11 +224,17 @@ def main():
 
         print('     - {} models were found'.format(counter))
 
+        data = pd.DataFrame()
         donors = set()
         acceptors = set()
         for (r, _donors, _acceptors), t in zip(results, trajectories):
-            hbonds_dict[int(t.parent.name),
-                        int(''.join(filter(str.isdigit, t.name)))] = r
+            epoch = int(t.parent.name)
+            trajectory = int(''.join(filter(str.isdigit, t.name)))
+            for model, hbonds in r.items():
+                data = data.append(pd.DataFrame(
+                    [(epoch, trajectory, model, hbonds)],
+                    columns=['epoch', 'trajectory', 'model', 'hbonds']))
+
             for d in _donors:
                 donors.add(d)
             for a in _acceptors:
@@ -247,25 +251,17 @@ def main():
         else:
             output_path = PELE_sim_path.joinpath(output_relative_path)
 
-        with open(str(output_path), 'w') as file:
+        output_info_path = Path(output_path.parent).joinpath(
+            output_path.name.strip(output_path.suffix) + '.info')
+
+        with open(str(output_info_path), 'w') as file:
             file.write(str(PELE_sim_path.name) + '\n')
             file.write('{} donors: {}\n'.format(len(donors),
                                                 list(donors)))
             file.write('{} acceptors: {}\n'.format(len(acceptors),
                                                    list(acceptors)))
-            file.write('Epoch    Trajectory    Model    Hbonds' + '\n')
-            for (epoch, traj_num), hbonds in hbonds_dict.items():
-                for model, hbs in hbonds.items():
-                    file.write('{:5d}    {:10d}    {:5d}    '.format(
-                        epoch, traj_num, model))
 
-                    if (len(hbs) > 0):
-                        for hb in hbs[:-1]:
-                            file.write('{},'.format(hb))
-
-                        file.write('{}'.format(hbs[-1]))
-
-                    file.write('\n')
+        data.to_csv(output_path, index=False)
 
 
 if __name__ == "__main__":
