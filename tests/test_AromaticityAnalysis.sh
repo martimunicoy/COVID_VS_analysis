@@ -1,1 +1,1 @@
-python ../AromaticityAnalysis.py sim1 sim2 
+python3 ../AromaticityAnalysis.py ligand.pdb 
