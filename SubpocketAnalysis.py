@@ -278,7 +278,9 @@ def main():
         template_path = PELE_sim_path.joinpath(template_relative_path,
                                                lig_resname.lower() + 'z')
         if aromaticity_file is not None:
-            aromaticity_path = PELE_sim_path.joinpath(aromaticity_file)
+            aromaticity_path = Path(alternative_output_path)
+            aromaticity_path = aromaticity_path.joinpath(PELE_sim_path.name)
+            aromaticity_path = aromaticity_path.joinpath(aromaticity_file)
         else:
             aromaticity_path = None
 
