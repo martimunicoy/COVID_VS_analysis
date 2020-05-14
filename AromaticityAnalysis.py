@@ -69,9 +69,17 @@ def main():
 
         output_path = lig_path.parent
         if (alternative_output_path is not None):
-            output_path = Path(alternative_output_path)
+            folder_name = lig_path.name.replace(lig_path.suffix, '')
+            output_path = Path(alternative_output_path).joinpath(folder_name)
+            output_path = output_path.joinpath(output)
+            try:
+                os.makedirs(str(output_path.parent))
+            except FileExistsError:
+                pass
+        else:
+            output_path = output_path.joinpath('_'.join((lig_path.name.replace(lig_path.suffix, ''), output)))
 
-        df.to_csv(output_path.joinpath('_'.join((lig_path.name.strip(lig_path.suffix), output))))
+        df.to_csv(output_path)
 
 
 if __name__ == "__main__":
