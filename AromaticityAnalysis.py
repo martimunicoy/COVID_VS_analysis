@@ -2,21 +2,12 @@
 
 
 # Standard imports
-import os
 import argparse as ap
-from multiprocessing import Pool
-from functools import partial
 from pathlib import Path
 
 # External imports
 from rdkit import Chem
 import pandas as pd
-
-# PELE imports
-from Helpers.PELEIterator import SimIt
-from Helpers import hbond_mod as hbm
-from Helpers.ReportUtils import extract_metrics
-
 
 # Script information
 __author__ = "Marti Municoy"
@@ -35,7 +26,7 @@ def parse_args():
 
     parser.add_argument("-o", "--output",
                         metavar="STR", type=str,
-                        default="aromaticity.csv")
+                        default="ligand_data.csv")
 
     parser.add_argument("--alternative_output_path",
                         metavar="PATH", type=str, default=None,
@@ -71,7 +62,8 @@ def main():
         if (alternative_output_path is not None):
             output_path = Path(alternative_output_path)
 
-        df.to_csv(output_path.joinpath('_'.join((lig_path.name.strip(lig_path.suffix), output))))
+        df.to_csv(output_path.joinpath('_'.join(
+            (lig_path.name.strip(lig_path.suffix), output))))
 
 
 if __name__ == "__main__":
