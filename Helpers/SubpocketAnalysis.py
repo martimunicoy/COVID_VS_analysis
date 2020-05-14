@@ -11,12 +11,13 @@ from typing import Dict, List, Tuple, Union, Optional
 # External imports
 import numpy as np
 import mdtraj as md
+from multiprocessing import current_process
 
 # Local imports
 SCRIPT_PATH = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(SCRIPT_PATH))
-from Utils import squared_distances
-from Template import ImpactTemplate
+from .Utils import squared_distances
+from .Template import ImpactTemplate
 
 
 # Script information
@@ -136,7 +137,7 @@ class Point(np.ndarray):
 
 class Subpocket(object):
     def __init__(self, list_of_residues: List[Residue],
-                 radius: Optional[str] = None):
+                 radius: Optional[Union[str, float, int]] = None):
         self._list_of_residues = list_of_residues
         if (radius is None):
             self.fixed_radius = None
@@ -146,6 +147,8 @@ class Subpocket(object):
             except ValueError:
                 raise ValueError('Wrong subpocket radius')
         self._ligand_atoms = []  # type: list
+        self._ligand_template = None  # type: Optional[ImpactTemplate]
+        self._ligand_aromaticity = None  # type: Optional[Dict[str, bool]]
 
     @property
     def list_of_residues(self) -> List[Residue]:
@@ -155,6 +158,14 @@ class Subpocket(object):
     def ligand_atoms(self) -> list:
         return self._ligand_atoms
 
+    @property
+    def ligand_template(self) -> Optional[ImpactTemplate]:
+        return self._ligand_template
+
+    @property
+    def ligand_aromaticity(self) -> Optional[Dict[str, bool]]:
+        return self._ligand_aromaticity
+
     def set_ligand_atoms(self, topology: md.Trajectory, lig_resname: str):
         snapshot = md.load(str(topology))
 
@@ -163,6 +174,13 @@ class Subpocket(object):
         for atom_id in atom_ids:
             atom = snapshot.top.atom(atom_id)
             self._ligand_atoms.append(atom)
+
+    def set_ligand_template(self, lig_template: ImpactTemplate):
+        self._ligand_template = lig_template
+
+    def set_ligand_aromaticity(self,
+                               ligand_aromaticity: Dict[str, bool]):
+        self._ligand_aromaticity = ligand_aromaticity
 
     def get_residue_coords(self, snapshot: md.Trajectory) -> np.array:
         coords = []
@@ -265,14 +283,19 @@ class Subpocket(object):
                                                centroid, radius)
         return np.sum(list(intersections.values()))
 
-    def get_nonpolar_intersection(self, intersections: Dict[str, float],
-                                  impact_template: ImpactTemplate,
+    def get_nonpolar_intersection(self, intersections: Dict[str, float]
                                   ) -> float:
+        try:
+            assert isinstance(self.ligand_template, ImpactTemplate)
+        except AssertionError:
+            raise AssertionError('Ligand template was not set')
+
         nonpolar_intersection = float(0)
         for atom in self.ligand_atoms:
             intersection = intersections[atom.name]
             element = atom.element.name
-            charge = impact_template.get_parameter_by_name(atom.name, 'charge')
+            charge = self.ligand_template.get_parameter_by_name(atom.name,
+                                                                'charge')
 
             if ((element == 'carbon' or element == 'hydrogen')
                     and (charge <= 0.2)):
@@ -280,9 +303,37 @@ class Subpocket(object):
 
         return nonpolar_intersection
 
-    def get_charge(self, intersections: Dict[str, float],
-                   impact_template: ImpactTemplate,
+    def get_aromatic_intersection(self, intersections: Dict[str, float]
+                                  ) -> float:
+        try:
+            assert isinstance(self.ligand_aromaticity, dict)
+        except AssertionError:
+            return -1.0
+
+        aromatic_intersection = float(0)
+        for atom in self.ligand_atoms:
+            intersection = intersections[atom.name]
+            try:
+                aromatic = self.ligand_aromaticity[atom.name]
+            except KeyError:
+                if current_process()._identity == (1,):  # type: ignore
+                    print('     - Warning: invalid ligand aromaticity file, '
+                          + 'aromatic occupancy will not be calculated')
+                self._ligand_aromaticity = None
+                return -1.0
+
+            if aromatic:
+                aromatic_intersection += intersection
+
+        return aromatic_intersection
+
+    def get_charge(self, intersections: Dict[str, float]
                    ) -> Tuple[float, float, float]:
+        try:
+            assert isinstance(self.ligand_template, ImpactTemplate)
+        except AssertionError:
+            raise AssertionError('Ligand template was not set')
+
         net_charge = float(0)
         positive_charge = float(0)
         negative_charge = float(0)
@@ -292,7 +343,8 @@ class Subpocket(object):
             # Radius in angstroms
             radius = atom.element.radius * 10
             volume = FOUR_THIRDS_PI * np.power(radius, 3)
-            charge = impact_template.get_parameter_by_name(atom.name, 'charge')
+            charge = self.ligand_template.get_parameter_by_name(
+                atom.name, 'charge')
             norm_charge = charge * intersection / volume
 
             net_charge += norm_charge
@@ -304,10 +356,9 @@ class Subpocket(object):
 
         return net_charge, positive_charge, negative_charge
 
-    def full_characterize(self, snapshot: md.Trajectory, ligand_resname: str,
-                          impact_template: ImpactTemplate
+    def full_characterize(self, snapshot: md.Trajectory, ligand_resname: str
                           ) -> Tuple[Point, float, Dict[str, float], float,
-                                     float, float, float]:
+                                     float, float, float, float]:
         if (self.fixed_radius is None):
             radius, centroid = self.get_default_radius(snapshot)
         else:
@@ -316,15 +367,16 @@ class Subpocket(object):
         intersections = self.get_intersections(snapshot, ligand_resname,
                                                centroid, radius)
 
-        np_intersection = self.get_nonpolar_intersection(intersections,
-                                                         impact_template)
+        np_intersection = self.get_nonpolar_intersection(intersections)
+
+        aromatic_intersection = self.get_aromatic_intersection(intersections)
 
         net_charge, positive_charge, negative_charge = self.get_charge(
-            intersections, impact_template)
+            intersections)
 
         return centroid, FOUR_THIRDS_PI * np.power(radius, 3), \
             np.sum(list(intersections.values())), np_intersection, \
-            net_charge, positive_charge, negative_charge
+            aromatic_intersection, net_charge, positive_charge, negative_charge
 
 
 def build_residues(residues_list: List[Tuple[Union[str, int], int]],

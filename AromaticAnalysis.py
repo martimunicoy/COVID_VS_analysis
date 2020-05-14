@@ -2,21 +2,12 @@
 
 
 # Standard imports
-import os
 import argparse as ap
-from multiprocessing import Pool
-from functools import partial
 from pathlib import Path
 
 # External imports
 from rdkit import Chem
 import pandas as pd
-
-# PELE imports
-from Helpers.PELEIterator import SimIt
-from Helpers import hbond_mod as hbm
-from Helpers.ReportUtils import extract_metrics
-
 
 # Script information
 __author__ = "Marti Municoy"
@@ -57,7 +48,7 @@ def main():
             print('   - Invalid file, skipping...')
             continue
 
-        lig = Chem.rdmolfiles.MolFromPDBFile(str(lig_path))
+        lig = Chem.rdmolfiles.MolFromPDBFile(str(lig_path), removeHs=False)
 
         data = []
         for atom in lig.GetAtoms():
@@ -77,7 +68,10 @@ def main():
             except FileExistsError:
                 pass
         else:
-            output_path = output_path.joinpath('_'.join((lig_path.name.replace(lig_path.suffix, ''), output)))
+            output_path = output_path.joinpath('_'.join(
+                (lig_path.name.replace(lig_path.suffix, ''), output)))
+
+        print(' - Aromaticity of {} saved to {}'.format(
 
         df.to_csv(output_path)
 
