@@ -4,6 +4,7 @@
 # Standard imports
 import argparse as ap
 from pathlib import Path
+import os
 
 # External imports
 from rdkit import Chem
@@ -71,10 +72,11 @@ def main():
             output_path = output_path.joinpath('_'.join(
                 (lig_path.name.replace(lig_path.suffix, ''), output)))
 
-        print(' - Aromaticity of {} saved to {}'.format(
+        print(' - Aromaticity saved to {}'.format(output_path))
 
         df.to_csv(output_path)
 
 
 if __name__ == "__main__":
     main()
+
