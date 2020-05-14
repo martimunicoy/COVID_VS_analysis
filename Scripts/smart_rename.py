@@ -22,13 +22,21 @@ def parse_args():
                         nargs='*',
                         help="Set of folders that will be renamed")
 
+    parser.add_argument("--prefix", nargs='?', action='append',
+                        metavar="C:R", type=str, default=[],
+                        help="Prefix pattern to append to files")
+
+    parser.add_argument("--suffix", nargs='?', action='append',
+                        metavar="C:R", type=str, default=[],
+                        help="Suffix pattern to append to files")
+
+    parser.add_argument("--cut", nargs='?', action='append',
+                        metavar="C:R", type=int, default=[],
+                        help="Field to be cut off from files")
+
     parser.add_argument("-d", "--delimiter", metavar="STR", type=str,
                         help="Delimiter that want to be splitted by",
                         default='_')
-
-    parser.add_argument("-f", "--field", metavar="INT[INT,INT]", type=str,
-                        help="Field or set of fields that will be kept",
-                        default='-1')
 
     parser.add_argument('--debug',
                         dest='debug',
@@ -46,7 +54,8 @@ def parse_args():
 
     args = parser.parse_args()
 
-    return args.folders, args.delimiter, args.field, args.debug, args.force
+    return args.folders, args.prefix, args.suffix, args.cut, \
+        args.delimiter, args.debug, args.force
 
 
 def query_yes_no(question, default="yes"):
@@ -82,15 +91,49 @@ def query_yes_no(question, default="yes"):
                              "(or 'y' or 'n').\n")
 
 
+def get_new_path(folder, prefixes, suffixes, cut, delimiter):
+    name = folder.name
+
+    new_name = cut_name(name, cut, delimiter)
+    if (new_name == ''):
+        print(' - Skipping folder {} because chosen '.format(folder)
+              + 'cut indexes erased completely the folder name')
+        return None
+
+    new_name = append_prefixes(new_name, prefixes, delimiter)
+    new_name = append_suffixes(new_name, suffixes, delimiter)
+
+    return new_name
+
+
+def cut_name(name, cut, delimiter):
+    try:
+        fields = name.split(delimiter)
+    except ValueError:
+        fields = [name, ]
+
+    accepted_fields = []
+    for i, f in enumerate(fields):
+        if i + 1 not in cut:
+            accepted_fields.append(f)
+    return '{}'.format(delimiter).join(accepted_fields)
+
+
+def append_prefixes(name, prefixes, delimiter):
+    for prefix in prefixes:
+        name = prefix + delimiter + name
+    return name
+
+
+def append_suffixes(name, suffixes, delimiter):
+    for suffix in suffixes:
+        name += delimiter + suffix
+    return name
+
+
 def main():
-    folders, delimiter, field, debug, force = parse_args()
-
-    fields = []
-    for f in field.split(','):
-        fields.append(int(f) - 1)
-
-    if (len(fields) == 0):
-        raise ValueError('No field was selected')
+    folders, prefixes, suffixes, cut, delimiter, debug, force = \
+        parse_args()
 
     for folder in folders:
         folder = Path(folder)
@@ -100,15 +143,9 @@ def main():
                 folder))
             continue
 
-        name = folder.name
-        try:
-            new_name = []
-            for f in fields:
-                new_name.append(name.split(delimiter)[f])
-            new_name = '_'.join(new_name)
-        except IndexError:
-            print(' - Skipping folder {} because chosen '.format(folder)
-                  + 'fields were out of range')
+        new_name = get_new_path(folder, prefixes, suffixes, cut, delimiter)
+
+        if new_name is None:
             continue
 
         new_path = folder.parent.joinpath(new_name)
