@@ -7,7 +7,7 @@ from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
 import os
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
 # Local imports
 from Helpers.PELEIterator import SimIt
@@ -30,9 +30,9 @@ __maintainer__ = "Marti Municoy"
 __email__ = "marti.municoy@bsc.es"
 
 
-def parse_args() -> Tuple[str, str, str, str, str, str, Optional[str],
-                          Optional[float], str, Optional[int], str, str, bool,
-                          str]:
+def parse_args() -> Tuple[str, str, str, str, str, List[str],
+                          Optional[List[str]], Optional[List[float]], str,
+                          Optional[int], str, str, Optional[str], bool, str]:
     parser = ap.ArgumentParser()
     parser.add_argument("traj_paths", metavar="PATH", type=str,
                         nargs='*',
@@ -86,6 +86,11 @@ def parse_args() -> Tuple[str, str, str, str, str, str, Optional[str],
                         metavar="PATH", type=str, default='output',
                         help="Relative path to PELE output folder")
 
+    parser.add_argument("--include_aromaticity",
+                        metavar="STR", type=str, default=None,
+                        help='Aromaticity analysis is included by retriving '
+                        + 'aromaticity data from the supplied file')
+
     parser.add_argument('--include_rejected_steps',
                         dest='include_rejected_steps',
                         action='store_true')
@@ -102,10 +107,28 @@ def parse_args() -> Tuple[str, str, str, str, str, str, Optional[str],
         args.template_path, args.report_name, args.subpocket, \
         args.subpocket_names, args.subpocket_radii, args.probe_atom_name, \
         args.processors_number, args.output_name, args.PELE_output_path, \
-        args.include_rejected_steps, args.alternative_output_path
+        args.include_aromaticity, args.include_rejected_steps, \
+        args.alternative_output_path
 
 
-def file_check(topology_path: Path, template_path: Path) -> bool:
+def print_initial_info(all_sim_it: SimIt, subpockets_residues: List[str],
+                       subpocket_names: Optional[List[str]]):
+    print(' - The following PELE simulation paths will be analyzed:')
+    for PELE_sim_path in all_sim_it:
+        print('   - {}'.format(PELE_sim_path))
+
+    print(' - The following subpockets will be analyzed:')
+    for i, subpocket_residues in enumerate(subpockets_residues):
+        if (subpocket_names is not None
+                and len(subpocket_names) == len(subpockets_residues)):
+            print('   - {}: {}'.format(subpocket_names[i], subpocket_residues))
+        else:
+            print('   - {}: {}'.format('S{}'.format(i + 1),
+                                       subpocket_residues))
+
+
+def file_check(topology_path: Path, template_path: Path,
+               aromaticity_path: Path) -> bool:
     if (not topology_path.is_file()):
         print(' - Skipping simulation because topology file with '
               + 'connectivity was missing')
@@ -116,12 +139,30 @@ def file_check(topology_path: Path, template_path: Path) -> bool:
               + 'ligand parameters was missing')
         return False
 
+    if (aromaticity_path is not None and not aromaticity_path.is_file()):
+        print(' - Warning: aromaticity file is missing, aromatic '
+              + 'occupancy will not be calculated')
+
     return True
 
 
+def get_aromaticities(aromaticity_path: Optional[Path]
+                      ) -> Optional[Dict[str, bool]]:
+    if aromaticity_path is None:
+        return None
+
+    data = pd.read_csv(str(aromaticity_path))
+
+    atom_names = [i.strip() for i in data.atom.to_list()]
+    aromaticities = map(bool, data.aromatic.to_list())
+
+    print(atom_names)
+
+    return dict(zip(atom_names, aromaticities))
+
+
 def subpocket_analysis(sim_path: Path, subpockets: list, topology_path: Path,
-                       lig_resname: str, lig_template: Path,
-                       trajectory: Path) -> List[Tuple]:
+                       lig_resname: str, trajectory: Path) -> List[Tuple]:
     results = []
 
     for i, snapshot in enumerate(md.load(str(trajectory),
@@ -131,13 +172,12 @@ def subpocket_analysis(sim_path: Path, subpockets: list, topology_path: Path,
                  int(''.join(filter(str.isdigit, trajectory.name))),
                  i)  # type: Tuple
         for subpocket in subpockets:
-            centroid, volume, intersection, nonpolar_intersection, \
-                net_charge, positive_charge, negative_charge = \
-                subpocket.full_characterize(snapshot,
-                                            lig_resname,
-                                            lig_template)
-            entry = (entry + (centroid, volume, intersection,
-                              nonpolar_intersection, net_charge,
+            centroid, _, intersection, nonpolar_intersection, \
+                aromatic_intersection, net_charge, positive_charge, \
+                negative_charge = subpocket.full_characterize(snapshot,
+                                                              lig_resname)
+            entry = (entry + (centroid, intersection, nonpolar_intersection,
+                              aromatic_intersection, net_charge,
                               positive_charge, negative_charge))
 
         results.append(entry)
@@ -145,7 +185,7 @@ def subpocket_analysis(sim_path: Path, subpockets: list, topology_path: Path,
     return results
 
 
-def get_simulation_subpockets(residues: list, radii,
+def get_simulation_subpockets(residues: list, radii: Optional[List[float]],
                               topology_path: Path) -> List[Subpocket]:
     chain_converter = ChainConverterForMDTraj(str(topology_path))
 
@@ -220,23 +260,12 @@ def main():
     PELE_sim_paths, lig_resname, topology_relative_path, \
         template_relative_path, report_name, subpockets_residues, \
         subpocket_names, subpocket_radii, probe_atom_name, proc_number, \
-        output_name, PELE_output_path, include_rejected_steps, \
-        alternative_output_path = parse_args()
+        output_name, PELE_output_path, aromaticity_file, \
+        include_rejected_steps, alternative_output_path = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
-    print(' - The following PELE simulation paths will be analyzed:')
-    for PELE_sim_path in all_sim_it:
-        print('   - {}'.format(PELE_sim_path))
-
-    print(' - The following subpockets will be analyzed:')
-    for i, subpocket_residues in enumerate(subpockets_residues):
-        if (subpocket_names is not None
-                and len(subpocket_names) == len(subpockets_residues)):
-            print('   - {}: {}'.format(subpocket_names[i], subpocket_residues))
-        else:
-            print('   - {}: {}'.format('S{}'.format(i + 1),
-                                       subpocket_residues))
+    print_initial_info(all_sim_it, subpockets_residues, subpocket_names)
 
     for PELE_sim_path in all_sim_it:
         print('')
@@ -245,17 +274,25 @@ def main():
         topology_path = PELE_sim_path.joinpath(topology_relative_path)
         template_path = PELE_sim_path.joinpath(template_relative_path,
                                                lig_resname.lower() + 'z')
+        if aromaticity_file is not None:
+            aromaticity_path = PELE_sim_path.joinpath(aromaticity_file)
+        else:
+            aromaticity_path = None
 
-        if not file_check(topology_path, template_path):
+        if not file_check(topology_path, template_path, aromaticity_path):
             continue
 
         ligand_template = ImpactTemplate(str(template_path))
+
+        aromaticities = get_aromaticities(aromaticity_path)
 
         subpockets = get_simulation_subpockets(subpockets_residues,
                                                subpocket_radii, topology_path)
 
         for subpocket in subpockets:
             subpocket.set_ligand_atoms(topology_path, lig_resname)
+            subpocket.set_ligand_template(ligand_template)
+            subpocket.set_ligand_aromaticity(aromaticities)
 
         # Build PELE iterables
         sim_it = SimIt(PELE_sim_path)
@@ -270,8 +307,7 @@ def main():
 
         # Subpocket analysis
         parallel_function = partial(subpocket_analysis, PELE_sim_path,
-                                    subpockets, topology_path, lig_resname,
-                                    ligand_template)
+                                    subpockets, topology_path, lig_resname)
 
         print('   - Subpocket analysis')
         with Pool(proc_number) as pool:
@@ -281,9 +317,10 @@ def main():
             results, ['simulation', 'epoch', 'trajectory', 'model']
             + [j for i in zip(
                 ["{}_centroid".format(i) for i in subpocket_names],
-                ["{}_volume".format(i) for i in subpocket_names],
                 ["{}_intersection".format(i) for i in subpocket_names],
                 ["{}_nonpolar_intersection".format(i)
+                 for i in subpocket_names],
+                ["{}_aromatic_intersection".format(i)
                  for i in subpocket_names],
                 ["{}_net_charge".format(i) for i in subpocket_names],
                 ["{}_positive_charge".format(i) for i in subpocket_names],
