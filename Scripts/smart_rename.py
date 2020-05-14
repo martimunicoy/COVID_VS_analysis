@@ -104,6 +104,8 @@ def get_new_path(folder, prefixes, suffixes, cut, delimiter):
     new_name = append_suffixes(new_name, suffixes, delimiter)
 
     if new_name == name:
+        print(' - Skipping folder {} because nothing '.format(folder)
+              + 'has to be done')
         return None
 
     return new_name
