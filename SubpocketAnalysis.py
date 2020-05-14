@@ -151,6 +151,9 @@ def get_aromaticities(aromaticity_path: Optional[Path]
     if aromaticity_path is None:
         return None
 
+    if not aromaticity_path.is_file():
+        return None
+
     data = pd.read_csv(str(aromaticity_path))
 
     atom_names = [i.strip() for i in data.atom.to_list()]
