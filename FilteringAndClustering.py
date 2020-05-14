@@ -188,11 +188,12 @@ def extract_hbonds(hbonds_path):
         # Extra hbonds and construct dict
         for line in file:
             line = line.strip()
-            fields = line.split()
+            fields = line.split(",")
             epoch, trajectory, model = map(int, fields[:3])
             _hbonds = []
             try:
-                for hb in fields[3].split(','):
+                hbs = ",".join(fields[3:]).strip("\"")
+                for hb in eval(hbs):
                     _hbonds.append(hb)
             except IndexError:
                 pass
