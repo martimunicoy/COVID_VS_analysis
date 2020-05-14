@@ -180,9 +180,9 @@ def extract_hbonds(hbonds_path):
 
     with open(str(hbonds_path), 'r') as file:
         # Skip four header lines
-        file.readline()
-        file.readline()
-        file.readline()
+        # file.readline()
+        # file.readline()
+        # file.readline()
         file.readline()
 
         # Extra hbonds and construct dict
