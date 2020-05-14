@@ -26,7 +26,7 @@ def parse_args():
 
     parser.add_argument("-o", "--output",
                         metavar="STR", type=str,
-                        default="ligand_data.csv")
+                        default="aromaticity.csv")
 
     parser.add_argument("--alternative_output_path",
                         metavar="PATH", type=str, default=None,
@@ -48,7 +48,7 @@ def main():
             print('   - Invalid file, skipping...')
             continue
 
-        lig = Chem.rdmolfiles.MolFromPDBFile(str(lig_path))
+        lig = Chem.rdmolfiles.MolFromPDBFile(str(lig_path), removeHs=False)
 
         data = []
         for atom in lig.GetAtoms():
@@ -61,9 +61,13 @@ def main():
         output_path = lig_path.parent
         if (alternative_output_path is not None):
             output_path = Path(alternative_output_path)
+        output_path = output_path.joinpath('_'.join(
+            (lig_path.name.replace(lig_path.suffix, ''), output)))
 
-        df.to_csv(output_path.joinpath('_'.join(
-            (lig_path.name.strip(lig_path.suffix), output))))
+        print(' - Aromaticity of {} saved to {}'.format(
+            lig_path, output_path))
+
+        df.to_csv(output_path)
 
 
 if __name__ == "__main__":
