@@ -16,6 +16,7 @@ from matplotlib import pyplot as plt
 SCRIPT_PATH = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(SCRIPT_PATH + '/..'))
 from Helpers.PELEIterator import SimIt
+from Helpers.SubpocketAnalysis import read_subpocket_dataframe
 
 
 # Script information
@@ -41,9 +42,9 @@ def parse_args():
                         help="IC50 csv file name",
                         default=None)
 
-    parser.add_argument('-m', '--metric', default='intersection',
+    parser.add_argument('-m', '--metric', default='occupancy',
                         nargs='?', type=str,
-                        choices=['intersection', 'nonpolar_intersection',
+                        choices=['occupancy', 'nonpolar_occupancy',
                                  'positive_charge', 'negative_charge'],
                         help='Metric whose distribution will be plotted')
 
@@ -62,39 +63,12 @@ def main():
     for sim_path in all_sim_it:
         print('   - {}'.format(sim_path.name))
 
-    columns = []
-    for PELE_sim_path in all_sim_it:
-        if (not PELE_sim_path.joinpath(csv_file_name).is_file()):
-            print(' - Skipping simulation because intersections csv file '
-                  + 'was missing')
-            continue
+    # TODO get rid of this compatibility issue
+    metric = metric.replace('occupancy', 'intersection')
 
-        data = pd.read_csv(PELE_sim_path.joinpath(csv_file_name))
-        data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
-
-        for col in data.columns:
-            if (col.endswith(metric)):
-                if (metric == 'intersection'
-                        and col.endswith('nonpolar_intersection')):
-                    continue
-                if (col not in columns):
-                    columns.append(col)
-
-    pretty_metric = metric.replace('_', ' ')
-    if metric == 'intersection' or metric == 'nonpolar_intersection':
-        pretty_metric = 'volume ' + pretty_metric
-        units = '$\AA^3$'
-    else:
-        units = 'a.u.'
-
-    print('   - Subpockets found:')
-    for col in columns:
-        print('     - {}'.format(col.strip('_' + metric)))
-
-    if (len(columns) == 0):
-        raise ValueError('No subpocket {} '.format(pretty_metric)
-                         + 'were found in the simulation paths that '
-                         + 'were supplied')
+    columns, pretty_metric, units = read_subpocket_dataframe(all_sim_it,
+                                                             csv_file_name,
+                                                             metric)
 
     fig, axs = plt.subplots(len(columns), 1, figsize=(20, 15))
     fig.suptitle('Subpocket-LIG {}'.format(pretty_metric))

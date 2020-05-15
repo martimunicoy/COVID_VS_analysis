@@ -12,12 +12,14 @@ from typing import Dict, List, Tuple, Union, Optional
 import numpy as np
 import mdtraj as md
 from multiprocessing import current_process
+import pandas as pd
 
 # Local imports
-SCRIPT_PATH = os.path.dirname(__file__)
-sys.path.append(os.path.abspath(SCRIPT_PATH))
+# SCRIPT_PATH = os.path.dirname(__file__)
+# sys.path.append(os.path.abspath(SCRIPT_PATH))
 from .Utils import squared_distances
 from .Template import ImpactTemplate
+from .PELEIterator import SimIt
 
 
 # Script information
@@ -435,3 +437,53 @@ def build_residues(residues_list: List[Tuple[Union[str, int], int]],
         residue_objectes.append(Residue(c_id, r_id))
 
     return residue_objectes
+
+
+def read_subpocket_dataframe(all_sim_it: SimIt, csv_file_name: str,
+                             metric: str) -> Tuple[List[str], str, str]:
+    columns = []
+    for PELE_sim_path in all_sim_it:
+        if (not PELE_sim_path.joinpath(csv_file_name).is_file()):
+            print(' - Skipping simulation because subpockets csv file '
+                  + 'was missing')
+            continue
+
+        data = pd.read_csv(PELE_sim_path.joinpath(csv_file_name))
+        data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
+
+        for col in data.columns:
+            if (col.endswith(metric)):
+                if (metric == 'intersection'
+                        and col.endswith('nonpolar_intersection')):
+                    continue
+                if (metric == 'intersection'
+                        and col.endswith('aromatic_intersection')):
+                    continue
+                if (col not in columns):
+                    columns.append(col)
+
+    pretty_metric = metric.replace('_', ' ')
+    if (metric == 'intersection' or metric == 'nonpolar_intersection'
+            or metric == 'aromatic_intersection'):
+        if (len(pretty_metric.split()) > 1):
+            pretty_metric = pretty_metric.split()[0] + ' volume ' + \
+                pretty_metric.split()[1]
+        else:
+            pretty_metric = 'volume ' + pretty_metric
+        units = '$\AA^3$'
+        # TODO get rid of this compatibility issue
+        pretty_metric = pretty_metric.replace('intersection', 'occupancy')
+    else:
+        pretty_metric += ' occupancy'
+        units = 'a.u.'
+
+    print('   - Subpockets found:')
+    for col in columns:
+        print('     - {}'.format(col.strip('_' + metric)))
+
+    if (len(columns) == 0):
+        raise ValueError('No subpocket {} '.format(pretty_metric)
+                         + 'were found in the simulation paths that '
+                         + 'were supplied')
+
+    return columns, pretty_metric, units

@@ -19,6 +19,7 @@ from sklearn.metrics import r2_score
 SCRIPT_PATH = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(SCRIPT_PATH + '/..'))
 from Helpers.PELEIterator import SimIt
+from Helpers.SubpocketAnalysis import read_subpocket_dataframe
 
 
 # Script information
@@ -228,7 +229,9 @@ def main():
     for sim_path in all_sim_it:
         print('   - {}'.format(sim_path.name))
 
-    columns = get_columns(all_sim_it, csv_file_name)
+    # TODO get rid of this compatibility issue
+    columns, _, _ = read_subpocket_dataframe(all_sim_it, csv_file_name,
+                                             'intersection')
 
     print(' - Subpockets found:')
     for col in columns:

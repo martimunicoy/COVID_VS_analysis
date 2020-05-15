@@ -19,6 +19,7 @@ from sklearn import metrics as skmetrics
 SCRIPT_PATH = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(SCRIPT_PATH + '/..'))
 from Helpers.PELEIterator import SimIt
+from Helpers.SubpocketAnalysis import read_subpocket_dataframe
 
 
 # Script information
@@ -29,7 +30,8 @@ __maintainer__ = "Marti Municoy"
 __email__ = "marti.municoy@bsc.es"
 
 
-def parse_args() -> Tuple[List[str], str, str, float, float, Optional[int]]:
+def parse_args() -> Tuple[List[str], str, str, float, float, Optional[int],
+                          str, str]:
     parser = ap.ArgumentParser()
 
     parser.add_argument("traj_paths", metavar="PATH", type=str,
@@ -46,7 +48,7 @@ def parse_args() -> Tuple[List[str], str, str, float, float, Optional[int]]:
 
     parser.add_argument("-p", "--percentile", metavar="FLOAT", type=float,
                         help="Percentile applied to the set of "
-                        + "intersections that are obtained for each subpocket",
+                        + "occupancies that are obtained for each subpocket",
                         default=95)
 
     parser.add_argument('--trajectories_fraction', metavar="FLOAT", type=float,
@@ -57,10 +59,22 @@ def parse_args() -> Tuple[List[str], str, str, float, float, Optional[int]]:
                         help="Maximum number of PELE steps to use in the plot",
                         default=None)
 
+    parser.add_argument('-m', '--metric', default='occupancy',
+                        nargs='?', type=str,
+                        choices=['occupancy', 'nonpolar_occupancy',
+                                 'aromatic_occupancy', 'positive_charge',
+                                 'negative_charge'],
+                        help='Metric whose correlation will be analyzed')
+
+    parser.add_argument('-o', '--output', metavar='STR', type=str,
+                        default='subpocket_correlations.png',
+                        help='Output name for the resulting plot')
+
     args = parser.parse_args()
 
     return args.traj_paths, args.subpockets, args.ic50, args.percentile, \
-        args.trajectories_fraction, args.maximum_steps
+        args.trajectories_fraction, args.maximum_steps, args.metric, \
+        args.output
 
 
 def apply_filtering(data: pd.DataFrame, traj_fraction: float,
@@ -88,47 +102,17 @@ def apply_filtering(data: pd.DataFrame, traj_fraction: float,
     return data
 
 
-def main():
-    # Parse args
-    PELE_sim_paths, csv_file_name, ic50_csv, percentile, traj_fraction, \
-        max_steps = parse_args()
-
-    all_sim_it = SimIt(PELE_sim_paths)
-
-    print(' - Simulations that will be analyzed:')
-    for sim_path in all_sim_it:
-        print('   - {}'.format(sim_path.name))
-
-    columns = []
-    for PELE_sim_path in all_sim_it:
-        if (not PELE_sim_path.joinpath(csv_file_name).is_file()):
-            print(' - Skipping simulation because subpockets csv file '
-                  + 'was missing')
-            continue
-
-        data = pd.read_csv(PELE_sim_path.joinpath(csv_file_name))
-        data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
-
-        for col in data.columns:
-            if ('_intersection' in col and 'nonpolar' not in col):
-                if (col not in columns):
-                    columns.append(col)
-
-    print(' - Subpockets found:')
-    for col in columns:
-        print('   - {}'.format(col.strip('_intersection')))
-
-    if (len(columns) == 0):
-        raise ValueError('No subpocket intersections were found in the '
-                         + 'simulation paths that were supplied')
-
+def make_plots(all_sim_it: SimIt, columns: List[str], csv_file_name: str,
+               percentile: float, traj_fraction: float, max_steps: int,
+               ic50_csv: str, output: str, metric: str, pretty_metric: str,
+               units: str):
     fig, axs = plt.subplots(len(columns), 1, figsize=(20, 15))
-    fig.suptitle('Subpocket-LIG volume intersection')
+    fig.suptitle('Subpocket-LIG {}'.format(pretty_metric))
 
     for i, col in enumerate(columns):
-        axs[i].set_title(col.strip('_intersection'))
-        axs[i].set_ylabel('{}-LIG volume intersection ($\AA^3$)'.format(
-            col.strip('_intersection')))
+        axs[i].set_title(col.strip('_' + metric))
+        axs[i].set_ylabel('{}-LIG {} ({})'.format(
+            pretty_metric, col.replace('_' + metric, ''), units))
 
     subpocket_results = pd.DataFrame()
     for PELE_sim_path in all_sim_it:
@@ -136,11 +120,11 @@ def main():
         print(' - Reading data from {}'.format(PELE_sim_path))
 
         if (not PELE_sim_path.joinpath(csv_file_name).is_file()):
-            print(' - Skipping simulation because intersection csv file '
-                  + 'is missing')
+            print(' - Skipping simulation because '
+                  + '{} csv file is missing'.format(pretty_metric))
             continue
 
-        print('   - Retrieving subpocket intersections')
+        print('   - Retrieving subpocket {}'.format(pretty_metric))
         data = pd.read_csv(PELE_sim_path.joinpath(csv_file_name))
 
         metrics = [PELE_sim_path.name, ]
@@ -172,9 +156,9 @@ def main():
 
     for i, col in enumerate(columns):
         ax = axs[int(i / 2)][i % 2]
-        ax.set_title(col.strip('_intersection'))
-        ax.set_ylabel('{}-percentile of {} occupancies'.format(
-            percentile, col.strip('_intersection')))
+        ax.set_title(col.replace('_' + metric, ''))
+        ax.set_ylabel('{}-percentile of {} in {} ({})'.format(
+            percentile, pretty_metric, col.replace('_' + metric, ''), units))
         ax.set_xlabel('-pIC50')
 
         x_array = np.array([X[i] for X in X_all])
@@ -219,8 +203,30 @@ def main():
         fig.delaxes(axs[int(i / 2)][1])
 
     plt.tight_layout(rect=(0, 0, 1, 0.97))
-    plt.savefig('subpocket_correlations.png')
+    plt.savefig(output)
     plt.close()
+
+
+def main():
+    # Parse args
+    PELE_sim_paths, csv_file_name, ic50_csv, percentile, traj_fraction, \
+        max_steps, metric, output = parse_args()
+
+    all_sim_it = SimIt(PELE_sim_paths)
+
+    print(' - Simulations that will be analyzed:')
+    for sim_path in all_sim_it:
+        print('   - {}'.format(sim_path.name))
+
+    # TODO get rid of this compatibility issue
+    metric = metric.replace('occupancy', 'intersection')
+
+    columns, pretty_metric, units = read_subpocket_dataframe(all_sim_it,
+                                                             csv_file_name,
+                                                             metric)
+
+    make_plots(all_sim_it, columns, csv_file_name, percentile, traj_fraction,
+               max_steps, ic50_csv, output, metric, pretty_metric, units)
 
 
 if __name__ == "__main__":
