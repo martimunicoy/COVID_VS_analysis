@@ -9,7 +9,7 @@ from functools import partial
 from pathlib import Path
 
 # Local imports
-from Helpers.PELEIterator import SimIt
+from Helpers import SimIt
 from Helpers import hbond_mod as hbm
 from Helpers.ReportUtils import extract_metrics
 
@@ -252,7 +252,7 @@ def main():
             output_path = PELE_sim_path.joinpath(output_relative_path)
 
         output_info_path = Path(output_path.parent).joinpath(
-            output_path.name.strip(output_path.suffix) + '.info')
+            output_path.name.replace(output_path.suffix, '') + '.info')
 
         with open(str(output_info_path), 'w') as file:
             file.write(str(PELE_sim_path.name) + '\n')

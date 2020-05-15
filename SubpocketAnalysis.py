@@ -10,12 +10,12 @@ import os
 from typing import List, Tuple, Optional, Dict
 
 # Local imports
-from Helpers.PELEIterator import SimIt
-from Helpers.SubpocketAnalysis import ChainConverterForMDTraj, Subpocket
+from Helpers import SimIt
+from Helpers import ChainConverterForMDTraj, Subpocket, build_residues
+from Helpers import ImpactTemplate
 from Helpers.SubpocketAnalysis import build_residues
 from Helpers.Data import build_dataframe_from_results
 from Helpers.ReportUtils import extract_metrics
-from Helpers.Template import ImpactTemplate
 
 # External imports
 import mdtraj as md
@@ -158,8 +158,6 @@ def get_aromaticities(aromaticity_path: Optional[Path]
 
     atom_names = [i.strip() for i in data.atom.to_list()]
     aromaticities = map(bool, data.aromatic.to_list())
-
-    print(atom_names)
 
     return dict(zip(atom_names, aromaticities))
 

@@ -6,7 +6,8 @@ import argparse as ap
 from pathlib import Path
 
 # Local imports
-from Helpers.PELEIterator import SimIt
+from Helpers import SimIt
+from Helpers.Hbonds import extract_hbonds
 
 # External imports
 import pandas as pd
@@ -85,28 +86,6 @@ def prepare_golden_dict(golden_hbonds):
                 golden_hbonds))
 
     return golden_dict
-
-
-def extract_hbonds(hbonds_path):
-    output_info_path = Path(str(hbonds_path).replace(hbonds_path.suffix, '')
-                            + '.info')
-
-    if (output_info_path.is_file()):
-        with open(str(output_info_path), 'r') as file:
-            # Skip four header lines
-            file.readline()
-            n_donors = int(file.readline().split()[0])
-            n_acceptors = int(file.readline().split()[0])
-            file.readline()
-    else:
-        print('   - Warning: H bonds info output file not found')
-        n_donors = -1
-        n_acceptors = -1
-
-    data = pd.read_csv(str(hbonds_path))
-    data.hbonds = data.hbonds.apply(literal_eval)
-
-    return data, n_donors, n_acceptors
 
 
 def hbond_fulfillment(data, golden_hbonds_1, golden_hbonds_2,

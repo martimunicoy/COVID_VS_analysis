@@ -15,8 +15,8 @@ from matplotlib import pyplot as plt
 # Local imports
 SCRIPT_PATH = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(SCRIPT_PATH + '/..'))
-from Helpers.PELEIterator import SimIt
-from Helpers.SubpocketAnalysis import read_subpocket_dataframe
+from Helpers import SimIt
+from Helpers.Subpockets import read_subpocket_dataframe
 
 
 # Script information
