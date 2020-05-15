@@ -5,6 +5,7 @@
 from .PELEIterator import SimIt
 from .Subpockets import ChainConverterForMDTraj, Subpocket
 from .Template import ImpactTemplate
+from .Hbonds import HBondLinker
 
 
 # Script information

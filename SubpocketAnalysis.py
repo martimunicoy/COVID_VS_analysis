@@ -11,9 +11,9 @@ from typing import List, Tuple, Optional, Dict
 
 # Local imports
 from Helpers import SimIt
-from Helpers import ChainConverterForMDTraj, Subpocket, build_residues
+from Helpers import ChainConverterForMDTraj, Subpocket
 from Helpers import ImpactTemplate
-from Helpers.SubpocketAnalysis import build_residues
+from Helpers.Subpockets import build_residues
 from Helpers.Data import build_dataframe_from_results
 from Helpers.ReportUtils import extract_metrics
 
@@ -32,7 +32,8 @@ __email__ = "marti.municoy@bsc.es"
 
 def parse_args() -> Tuple[str, str, str, str, str, List[str],
                           Optional[List[str]], Optional[List[float]], str,
-                          Optional[int], str, str, Optional[str], bool, str]:
+                          Optional[int], str, str, Optional[str], bool,
+                          Optional[str]]:
     parser = ap.ArgumentParser()
     parser.add_argument("traj_paths", metavar="PATH", type=str,
                         nargs='*',
@@ -96,7 +97,7 @@ def parse_args() -> Tuple[str, str, str, str, str, List[str],
                         action='store_true')
 
     parser.add_argument("--alternative_output_path",
-                        metavar="PATH", type=str, default='None',
+                        metavar="PATH", type=str, default=None,
                         help="Alternative path to save output results")
 
     parser.set_defaults(include_rejected_steps=False)
@@ -276,8 +277,12 @@ def main():
         template_path = PELE_sim_path.joinpath(template_relative_path,
                                                lig_resname.lower() + 'z')
         if aromaticity_file is not None:
-            aromaticity_path = Path(alternative_output_path)
-            aromaticity_path = aromaticity_path.joinpath(PELE_sim_path.name)
+            if alternative_output_path is not None:
+                aromaticity_path = Path(alternative_output_path)
+                aromaticity_path = aromaticity_path.joinpath(
+                    PELE_sim_path.name)
+            else:
+                aromaticity_path = PELE_sim_path
             aromaticity_path = aromaticity_path.joinpath(aromaticity_file)
         else:
             aromaticity_path = None
@@ -363,7 +368,7 @@ def main():
         else:
             output_path = PELE_sim_path.joinpath(output_name)
 
-        data.to_csv(str(output_path))
+        data.to_csv(str(output_path), index=False)
 
 
 if __name__ == "__main__":
