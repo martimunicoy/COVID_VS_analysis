@@ -45,17 +45,23 @@ def parse_args():
     parser.add_argument('-m', '--metric', default='occupancy',
                         nargs='?', type=str,
                         choices=['occupancy', 'nonpolar_occupancy',
-                                 'positive_charge', 'negative_charge'],
+                                 'aromatic_occupancy', 'positive_charge',
+                                 'negative_charge'],
                         help='Metric whose distribution will be plotted')
+
+    parser.add_argument('-o', '--output', metavar='STR', type=str,
+                        default=None,
+                        help='Output name for the resulting plot')
 
     args = parser.parse_args()
 
-    return args.traj_paths, args.subpockets, args.ic50, args.metric
+    return args.traj_paths, args.subpockets, args.ic50, args.metric, \
+        args.output
 
 
 def main():
     # Parse args
-    PELE_sim_paths, csv_file_name, ic50_csv, metric = parse_args()
+    PELE_sim_paths, csv_file_name, ic50_csv, metric, output = parse_args()
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -123,8 +129,11 @@ def main():
         for tick in ax.get_xticklabels():
             tick.set_rotation(90)
 
+    if (output is None):
+        output = 'subpocket_{}.png'.format(metric)
+
     plt.tight_layout(h_pad=5, rect=(0, 0.05, 1, 0.95))
-    plt.savefig('subpocket_{}.png'.format(metric))
+    plt.savefig(output)
     plt.close()
 
 
