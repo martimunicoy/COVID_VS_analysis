@@ -214,8 +214,13 @@ def extract_ligand_metrics(reports, cols, proc_number):
 
 
 def filter_by_hbonds(f_hbond_data):
-    unhashable_PELE_ids = f_hbond_data.loc[:, ('epoch', 'trajectory',
-                                               'model')].to_numpy()
+    # Compatibility with older pandas versions
+    try:
+        unhashable_PELE_ids = f_hbond_data.loc[:, ('epoch', 'trajectory',
+                                                   'model')].to_list()
+    except AttributeError:
+        unhashable_PELE_ids = f_hbond_data.loc[:, ('epoch', 'trajectory',
+                                                   'model')].values
 
     PELE_ids = []
     for PELE_id in unhashable_PELE_ids:
