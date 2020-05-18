@@ -3,7 +3,7 @@
 
 # Standard imports
 from pathlib import Path
-from typing import Tuple, List, Optional, Union, FrozenSet, Set
+from typing import Tuple, List, Optional, Union, FrozenSet, Dict
 
 # External imports
 import pandas as pd
@@ -167,3 +167,40 @@ def extract_hbond_linkers(hbonds_path: Path) -> Tuple[pd.DataFrame, int, int]:
     data.hbonds = data.hbonds.apply(build_linkers)
 
     return data, n_donors, n_acceptors
+
+
+def hbond_fulfillment(data: pd.DataFrame, golden_hbonds_1: List[HBondLinker],
+                      golden_hbonds_2: List[HBondLinker],
+                      minimum_g2_conditions: int):
+    hb_linkers = data.hbonds.to_list()
+    total_fulfillments = 0
+    fulfillments_by_g1_hbond = {}  # type: Dict[HBondLinker, int]
+    fulfillments_by_g2_hbond = {}  # type: Dict[HBondLinker, int]
+    mask = []
+    for _hb_linkers in hb_linkers:
+        g1_matchs = 0
+        g2_matchs = 0
+        for hb_linker in _hb_linkers:
+            g1_match, other_g1_hb = hb_linker.match_with_any(golden_hbonds_1)
+            if g1_match:
+                g1_matchs += 1
+                fulfillments_by_g1_hbond[other_g1_hb] = \
+                    fulfillments_by_g1_hbond.get(other_g1_hb, 0) + 1
+
+            g2_match, other_g2_hb = hb_linker.match_with_any(golden_hbonds_2)
+            if g2_match:
+                g2_matchs += 1
+                fulfillments_by_g2_hbond[other_g2_hb] = \
+                    fulfillments_by_g2_hbond.get(other_g2_hb, 0) + 1
+
+        if ((g1_matchs == len(golden_hbonds_1))
+                and (g2_matchs >= minimum_g2_conditions)):
+            total_fulfillments += 1
+            accepted = True
+        else:
+            accepted = False
+
+        mask.append(accepted)
+
+    return total_fulfillments, len(hb_linkers), fulfillments_by_g1_hbond, \
+        fulfillments_by_g2_hbond, data[mask]

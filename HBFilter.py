@@ -6,9 +6,11 @@ import argparse as ap
 from pathlib import Path
 
 # Local imports
-from Helpers import SimIt, HBondLinker
-from Helpers.Hbonds import extract_hbond_linkers, get_hbond_linkers
-from Helpers.Hbonds import check_hbonds_linkers, print_hbonds
+from Helpers import SimIt
+from Helpers.Hbonds import (
+    extract_hbond_linkers, get_hbond_linkers, check_hbonds_linkers,
+    print_hbonds, hbond_fulfillment
+)
 from typing import List, Dict
 
 # External imports
@@ -74,43 +76,6 @@ def parse_args():
         args.ligand_resname, args.subpocket_filtering
 
 
-def hbond_fulfillment(data: pd.DataFrame, golden_hbonds_1: List[HBondLinker],
-                      golden_hbonds_2: List[HBondLinker],
-                      minimum_g2_conditions: int):
-    hb_linkers = data.hbonds.to_list()
-    total_fulfillments = 0
-    fulfillments_by_g1_hbond = {}  # type: Dict[HBondLinker, int]
-    fulfillments_by_g2_hbond = {}  # type: Dict[HBondLinker, int]
-    mask = []
-    for _hb_linkers in hb_linkers:
-        g1_matchs = 0
-        g2_matchs = 0
-        for hb_linker in _hb_linkers:
-            g1_match, other_g1_hb = hb_linker.match_with_any(golden_hbonds_1)
-            if g1_match:
-                g1_matchs += 1
-                fulfillments_by_g1_hbond[other_g1_hb] = \
-                    fulfillments_by_g1_hbond.get(other_g1_hb, 0) + 1
-
-            g2_match, other_g2_hb = hb_linker.match_with_any(golden_hbonds_2)
-            if g2_match:
-                g2_matchs += 1
-                fulfillments_by_g2_hbond[other_g2_hb] = \
-                    fulfillments_by_g2_hbond.get(other_g2_hb, 0) + 1
-
-        if ((g1_matchs == len(golden_hbonds_1))
-                and (g2_matchs >= minimum_g2_conditions)):
-            total_fulfillments += 1
-            accepted = True
-        else:
-            accepted = False
-
-        mask.append(accepted)
-
-    return total_fulfillments, len(hb_linkers), fulfillments_by_g1_hbond, \
-        fulfillments_by_g2_hbond, data[mask]
-
-
 def get_ligand_rotatable_bonds(lig_rotamers_path):
     counter = 0
     with open(str(lig_rotamers_path), 'r') as lrl:
@@ -172,8 +137,6 @@ def main():
             fulfillments_by_g2_hbond, f_data = \
             hbond_fulfillment(data, golden_hbonds_1, golden_hbonds_2,
                               minimum_g2_conditions)
-
-        print(f_data)
 
         if (total_models == 0):
             print(' - Skipping simulation because no models were found')

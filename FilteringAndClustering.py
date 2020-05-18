@@ -13,7 +13,10 @@ from operator import itemgetter
 from Helpers import SimIt
 from Helpers.ReportUtils import extract_PELE_ids
 from Helpers.ReportUtils import get_metric_by_PELE_id
-from Helpers.Hbonds import extract_hbonds
+from Helpers.Hbonds import (
+    extract_hbond_linkers, hbond_fulfillment, get_hbond_linkers,
+    check_hbonds_linkers, print_hbonds
+)
 
 # External imports
 import mdtraj as md
@@ -70,7 +73,7 @@ def parse_args():
 
     parser.add_argument("--hbonds_path",
                         metavar="PATH", type=str,
-                        default='hbonds.out',
+                        default='hbonds.csv',
                         help="Path to H bonds file")
 
     parser.add_argument("-g1", "--golden_hbonds_1", nargs='*',
@@ -210,28 +213,15 @@ def extract_ligand_metrics(reports, cols, proc_number):
     return results
 
 
-def filter_by_hbonds(hbonds, golden_hbonds_1, golden_hbonds_2,
-                     minimum_g2_conditions):
-    filtered_PELE_ids = []
-    for PELE_id, _hbonds in hbonds.items():
-        g1_matchs = 0
-        g2_matchs = 0
-        for hb in set(_hbonds):
-            chain, residue, atom = hb.split(':')
-            if ((chain, residue) in golden_hbonds_1):
-                if ((atom in golden_hbonds_1[(chain, residue)])
-                        or ('all' in golden_hbonds_1[(chain, residue)])):
-                    g1_matchs += 1
-            if ((chain, residue) in golden_hbonds_2):
-                if ((atom in golden_hbonds_2[(chain, residue)])
-                        or ('all' in golden_hbonds_2[(chain, residue)])):
-                    g2_matchs += 1
+def filter_by_hbonds(f_hbond_data):
+    unhashable_PELE_ids = f_hbond_data.loc[:, ('epoch', 'trajectory',
+                                               'model')].to_numpy()
 
-        if ((g1_matchs == len(golden_hbonds_1))
-                and (g2_matchs >= minimum_g2_conditions)):
-            filtered_PELE_ids.append(PELE_id)
+    PELE_ids = []
+    for PELE_id in unhashable_PELE_ids:
+        PELE_ids.append(tuple(PELE_id))
 
-    return filtered_PELE_ids
+    return PELE_ids
 
 
 def filter_by_energies(PELE_ids, ie_by_PELE_id):
@@ -512,6 +502,8 @@ def generate_plot(PELE_ids, filtered_PELE_ids_1, filtered_PELE_ids_2,
     plt.savefig(str(output_path.joinpath(
         energy_label.lower().replace(' ', '_') + '_plot.png')))
 
+    plt.close()
+
 
 def main():
     # Parse args
@@ -522,22 +514,17 @@ def main():
         representative_extraction_method, maximum_cluster_density_threshold = \
         parse_args()
 
-    golden_hbonds_1 = prepare_golden_dict(golden_hbonds_1)
-    golden_hbonds_2 = prepare_golden_dict(golden_hbonds_2)
+    golden_hbonds_1 = get_hbond_linkers(golden_hbonds_1)
+    golden_hbonds_2 = get_hbond_linkers(golden_hbonds_2)
+
+    check_hbonds_linkers(golden_hbonds_1)
+    check_hbonds_linkers(golden_hbonds_2)
 
     print(' - Golden H bonds set 1:')
-    for res, atoms in golden_hbonds_1.items():
-        print('   - {}:{}:'.format(*res), end='')
-        for at in atoms[:-1]:
-            print(at, end=',')
-        print(atoms[-1])
+    print_hbonds(golden_hbonds_1)
     print(' - Golden H bonds set 2 ({} '.format(minimum_g2_conditions)
           + 'of them need to be fulfilled):')
-    for res, atoms in golden_hbonds_2.items():
-        print('   - {}:{}:'.format(*res), end='')
-        for at in atoms[:-1]:
-            print(at, end=',')
-        print(atoms[-1])
+    print_hbonds(golden_hbonds_2)
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -583,11 +570,15 @@ def main():
 
         PELE_ids = extract_PELE_ids(reports)
 
-        hbonds, _, _ = extract_hbonds(hbonds_path)
+        hbond_data, _, _ = extract_hbond_linkers(hbonds_path)
 
-        print(' - Detected {} sets of H bonds'.format(len(hbonds)))
+        print(' - Detected {} sets of H bonds'.format(len(hbond_data)))
 
-        if (len(hbonds) == 0):
+        total_fulfillments, total_models, _, _, f_hbond_data = \
+            hbond_fulfillment(hbond_data, golden_hbonds_1, golden_hbonds_2,
+                              minimum_g2_conditions)
+
+        if total_fulfillments == 0:
             print(' - Skipping simulation because no H bonds were found')
             continue
 
@@ -613,9 +604,7 @@ def main():
         rmsd_by_PELE_id = get_metric_by_PELE_id(PELE_ids, rmsds)
         te_by_PELE_id = get_metric_by_PELE_id(PELE_ids, tes)
 
-        filtered_PELE_ids_1 = filter_by_hbonds(hbonds, golden_hbonds_1,
-                                               golden_hbonds_2,
-                                               minimum_g2_conditions)
+        filtered_PELE_ids_1 = filter_by_hbonds(f_hbond_data)
 
         print(' - H bond filtering: {} '.format(len(filtered_PELE_ids_1))
               + 'structures were selected out of '
