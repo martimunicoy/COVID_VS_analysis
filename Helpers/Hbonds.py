@@ -118,10 +118,6 @@ def check_hbonds_linkers(hbond_linkers: List[HBondLinker]):
 
         for hb_linker_found in hb_linkers_found:
             if (hb_linker_found.chain == hb_linker.chain
-                    and hb_linker_found.residue == hb_linker.residue):
-                print(hb_linker_found.atoms)
-                print(hb_linker.atoms)
-            if (hb_linker_found.chain == hb_linker.chain
                     and hb_linker_found.residue == hb_linker.residue
                     and ('*' in hb_linker_found.atoms
                          or '*' in hb_linker.atoms
@@ -140,10 +136,18 @@ def print_hbonds(hbond_linkers: List[HBondLinker]):
 
 
 def build_linkers(raw_linkers):
-    hb_bunch = raw_linkers.strip('\'\"')
+    hb_bunch = raw_linkers.strip('\'\"[]')
+    if not hb_bunch:
+        return []
     hbs = hb_bunch.split()
-    hbs = [i.strip(',[]') for i in hbs]
-    return get_hbond_linkers(hbs)
+    hbs = [i.strip(',[]\'\"') for i in hbs]
+    try:
+        hb_linkers = get_hbond_linkers(hbs)
+    except ValueError:
+        print('   - Warning: line \'{}\' '.format(raw_linkers)
+              + 'has wrong format. H bonds in this line will be ignored.')
+        hb_linkers = []
+    return hb_linkers
 
 
 def extract_hbond_linkers(hbonds_path: Path) -> Tuple[pd.DataFrame, int, int]:
