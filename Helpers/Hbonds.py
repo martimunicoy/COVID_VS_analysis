@@ -176,7 +176,12 @@ def extract_hbond_linkers(hbonds_path: Path) -> Tuple[pd.DataFrame, int, int]:
 def hbond_fulfillment(data: pd.DataFrame, golden_hbonds_1: List[HBondLinker],
                       golden_hbonds_2: List[HBondLinker],
                       minimum_g2_conditions: int):
-    hb_linkers = data.hbonds.to_list()
+    # Compatibility with older pandas versions
+    try:
+        hb_linkers = data.hbonds.to_list()
+    except AttributeError:
+        hb_linkers = data.hbonds.values
+
     total_fulfillments = 0
     fulfillments_by_g1_hbond = {}  # type: Dict[HBondLinker, int]
     fulfillments_by_g2_hbond = {}  # type: Dict[HBondLinker, int]

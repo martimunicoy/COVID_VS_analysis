@@ -658,7 +658,7 @@ def main():
         if (not output_path.is_dir()):
             os.mkdir(str(output_path))
 
-        print(' - Results')
+        print(' - Results:')
         print('   - Number of clusters:      {:25d}'.format(
             len(cluster_centers)))
         print('   - Selected cluster:        {:25d}'.format(cluster_id))
