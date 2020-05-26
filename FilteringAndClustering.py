@@ -134,21 +134,6 @@ def parse_args():
         args.maximum_cluster_density_threshold
 
 
-def prepare_golden_dict(golden_hbonds):
-    golden_dict = {}
-    for hb in golden_hbonds:
-        hb_data = hb.split(':')
-        if (len(hb_data) == 2):
-            golden_dict[tuple(hb_data)] = ['all']
-        elif (len(hb_data) == 3):
-            golden_dict[tuple(hb_data[0:2])] = hb_data[2].split(',')
-        else:
-            print('Error: golden H bonds \'{}\' have a wrong format'.format(
-                golden_hbonds))
-
-    return golden_dict
-
-
 def get_reports_list(trajectories, report_name):
     reports_list = []
 

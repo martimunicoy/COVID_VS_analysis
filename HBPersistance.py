@@ -4,10 +4,15 @@
 # Standard imports
 import argparse as ap
 from collections import defaultdict
+from pathlib import Path
 
-# PELE imports
+# External imports
+import numpy as np
+
+# Local imports
 from Helpers.PELEIterator import SimIt
-
+from Helpers.Hbonds import (extract_hbond_linkers, get_hbond_linkers,
+                            print_hbonds, hbond_persistance)
 
 # Script information
 __author__ = "Marti Municoy"
@@ -25,13 +30,13 @@ def parse_args():
 
     parser.add_argument("--hbonds_path",
                         metavar="PATH", type=str,
-                        default='hbonds.out',
+                        default='hbonds.csv',
                         help="Path to H bonds file")
 
     parser.add_argument("--hbonds", nargs='*',
                         metavar="C:R[:A1, A2]", type=str, default=[],
-                        help="List of H bonds whose persistance will be " +
-                        "calculated")
+                        help="List of H bonds whose persistance will be "
+                        + "calculated")
 
     parser.add_argument("-o", "--output_path",
                         metavar="PATH", type=str, default="persistance.out")
@@ -87,36 +92,6 @@ def extract_hbonds(hbonds_path):
     return hbonds, n_donors, n_acceptors
 
 
-def hbond_persistance(hbonds_to_track, hbonds):
-    persistance_by_hbond = defaultdict(list)
-    hbond_persistance = {}
-    for PELE_id, _hbonds in hbonds.items():
-        current_hbonds = set()
-        for hb in set(_hbonds):
-            chain, residue, atom = hb.split(':')
-            if ((chain, residue) in hbonds_to_track):
-                if ((atom in hbonds_to_track[(chain, residue)]) or
-                        ('all' in hbonds_to_track[(chain, residue)])):
-                    _hb = (chain, residue, tuple(
-                        hbonds_to_track[(chain, residue)]))
-                    current_hbonds.add(_hb)
-                    hbond_persistance[_hb] = hbond_persistance.get(_hb, 0) + 1
-
-        non_current_hbonds = set()
-        for p_hb in hbond_persistance.keys():
-            if (p_hb not in current_hbonds):
-                non_current_hbonds.add(p_hb)
-
-        for hb in non_current_hbonds:
-            persistance_by_hbond[hb].append(hbond_persistance.pop(hb))
-
-    non_current_hbonds = set(hbond_persistance.keys())
-    for hb in non_current_hbonds:
-        persistance_by_hbond[hb].append(hbond_persistance.pop(hb))
-
-    return persistance_by_hbond, len(hbonds)
-
-
 def get_ligand_rotatable_bonds(lig_rotamers_path):
     counter = 0
     with open(str(lig_rotamers_path), 'r') as lrl:
@@ -132,14 +107,12 @@ def main():
     PELE_sim_paths, hbonds_relative_path, hbonds, output_path, lig_resname = \
         parse_args()
 
-    hbonds_to_track = prepare_hbond_dict(hbonds)
+    output_path = Path(output_path)
+
+    hbonds_to_track = get_hbond_linkers(hbonds)
 
     print(' - Persistance will be calculated on H bonds :')
-    for res, atoms in hbonds_to_track.items():
-        print('   - {}:{}:'.format(*res), end='')
-        for at in atoms[:-1]:
-            print(at, end=',')
-        print(atoms[-1])
+    print_hbonds(hbonds_to_track)
 
     all_sim_it = SimIt(PELE_sim_paths)
 
@@ -147,35 +120,30 @@ def main():
         print('')
         print(' - Filtering H bonds from {}'.format(PELE_sim_path))
         hbonds_path = PELE_sim_path.joinpath(hbonds_relative_path)
-        lig_rotamers_path = PELE_sim_path.joinpath('DataLocal/' +
-                                                   'LigandRotamerLibs/' +
-                                                   '{}'.format(lig_resname) +
-                                                   '.rot.assign')
+        lig_rotamers_path = PELE_sim_path.joinpath('DataLocal/'
+                                                   + 'LigandRotamerLibs/'
+                                                   + '{}'.format(lig_resname)
+                                                   + '.rot.assign')
 
         if (not hbonds_path.is_file()):
-            print(' - Skipping simulation because hbonds file was ' +
-                  'missing')
+            print(' - Skipping simulation because hbonds file was '
+                  + 'missing')
             continue
 
         if (not lig_rotamers_path.is_file()):
-            print(' - Skipping simulation because ligand rotamer library was' +
-                  ' missing')
+            print(' - Skipping simulation because ligand rotamer library was'
+                  + ' missing')
             continue
 
-        hbonds, n_donors, n_acceptors = extract_hbonds(hbonds_path)
+        hbond_data, n_donors, n_acceptors = extract_hbond_linkers(hbonds_path)
 
-        print(' - Detected {} sets of H bonds'.format(len(hbonds)))
+        print(' - Detected {} sets of H bonds'.format(len(hbond_data)))
 
         if (len(hbonds) == 0):
             print(' - Skipping simulation because no H bonds were found')
             continue
 
-        persistance_by_hbond, total_models = hbond_persistance(hbonds_to_track,
-                                                               hbonds)
-
-        if (total_models == 0):
-            print(' - Skipping simulation because no models were found')
-            continue
+        persistance_by_hbond = hbond_persistance(hbond_data, hbonds_to_track)
 
         n_rotamers = get_ligand_rotatable_bonds(lig_rotamers_path)
 
@@ -183,35 +151,51 @@ def main():
         print('   - Ligand rotamers:           {:10d}'.format(n_rotamers))
         print('   - Ligand donors:             {:10d}'.format(n_donors))
         print('   - Ligand acceptors:          {:10d}'.format(n_acceptors))
-        print('   - Total models:              {:10d}'.format(total_models))
+        print('   - Total models:              {:10d}'.format(len(hbond_data)))
         if (len(hbonds_to_track) > 0):
             print('   - Maximum persistance by H bond:')
-        for (chain, residue), atoms in hbonds_to_track.items():
-            print('     - {}:{}:                {:10d}'.format(
-                chain, residue,
-                max(persistance_by_hbond.get(
-                    (chain, residue, tuple(atoms)), [0, ]))))
+        for hb_linker in hbonds_to_track:
+            print('     - {}:{}:{:20s} {:10d}'.format(
+                hb_linker.chain, hb_linker.residue,
+                ','.join(list(hb_linker.atoms)),
+                np.max(persistance_by_hbond.get(hb_linker, [0, ]))))
+
+        if (len(hbonds_to_track) > 0):
+            print('   - Mean persistance by H bond:')
+        for hb_linker in hbonds_to_track:
+            print('     - {}:{}:{:20s} {:10.1f}'.format(
+                hb_linker.chain, hb_linker.residue,
+                ','.join(list(hb_linker.atoms)),
+                np.mean(persistance_by_hbond.get(hb_linker, [0, ]))))
 
         with open(str(PELE_sim_path.joinpath(output_path)), 'w') as f:
-            for (chain, residue), atoms in hbonds_to_track.items():
-                f.write('{}:{}:{};'.format(chain, residue, ','.join(atoms)))
+            for hb_linker in hbonds_to_track:
+                f.write('{}:{}:{};'.format(hb_linker.chain, hb_linker.residue,
+                                           ','.join(hb_linker.atoms)))
                 f.write(';'.join(map(str, sorted(persistance_by_hbond.get(
-                    (chain, residue, tuple(atoms)), []), reverse=True))))
+                    hb_linker, []), reverse=True))))
                 f.write('\n')
 
-        with open(str(PELE_sim_path.joinpath(
-                output_path.split('.')[0] + '_summary.out')), 'w') as f:
+        with open(str(PELE_sim_path.joinpath(str(
+            output_path).replace(output_path.suffix, '')
+                + '_summary.out')), 'w') as f:
             f.write('rotamers;donors;acceptors;models')
-            for (chain, residue), atoms in hbonds_to_track.items():
+            for hb_linker in hbonds_to_track:
                 f.write(';maxp_{}:{}:{}'.format(
-                    chain, residue, ','.join(atoms)))
+                    hb_linker.chain, hb_linker.residue,
+                    ','.join(hb_linker.atoms)))
+                f.write(';meanp_{}:{}:{}'.format(
+                    hb_linker.chain, hb_linker.residue,
+                    ','.join(hb_linker.atoms)))
             f.write('\n')
 
             f.write('{};{};{};'.format(n_rotamers, n_donors, n_acceptors))
-            f.write('{}'.format(total_models))
-            for (chain, residue), atoms in hbonds_to_track.items():
-                f.write(';{:d}'.format(max(persistance_by_hbond.get(
-                    (chain, residue, tuple(atoms)), [0, ]))))
+            f.write('{}'.format(len(hbond_data)))
+            for hb_linker in hbonds_to_track:
+                f.write(';{:d}'.format(np.max(persistance_by_hbond.get(
+                    hb_linker, [0, ]))))
+                f.write(';{:.1f}'.format(np.mean(persistance_by_hbond.get(
+                    hb_linker, [0, ]))))
 
 
 if __name__ == "__main__":

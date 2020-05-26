@@ -3,7 +3,8 @@
 
 # Standard imports
 from pathlib import Path
-from typing import Tuple, List, Optional, Union, FrozenSet, Dict
+from typing import Tuple, List, Optional, Union, FrozenSet
+from collections import defaultdict
 
 # External imports
 import pandas as pd
@@ -213,3 +214,40 @@ def hbond_fulfillment(data: pd.DataFrame, golden_hbonds_1: List[HBondLinker],
 
     return total_fulfillments, len(hb_linkers), fulfillments_by_g1_hbond, \
         fulfillments_by_g2_hbond, data[mask]
+
+
+def hbond_persistance(data: pd.DataFrame, hbonds_to_track: List[HBondLinker]):
+    persistances_by_hbond = defaultdict(list)
+    epochs = data.epoch.unique()
+    for hb_linker in hbonds_to_track:
+        for epoch in epochs:
+            data_subset = data.loc[data.epoch == epoch]
+            trajectories = data_subset.trajectory.unique()
+            for trajectory in trajectories:
+                data_subsubset = data_subset.loc[data_subset.trajectory
+                                                 == trajectory]
+                # Compatibility with older pandas versions
+                try:
+                    data_subsubset.sort(['model'], inplace=True)
+                except AttributeError:
+                    data_subsubset.sort_values(['model'], inplace=True)
+                # Compatibility with older pandas versions
+                try:
+                    all_hbonds = data_subsubset.hbonds.to_list()
+                except AttributeError:
+                    all_hbonds = data_subsubset.hbonds.values
+
+                counter = 0
+                for hbonds in all_hbonds:
+                    match, _ = hb_linker.match_with_any(hbonds)
+                    if match:
+                        counter += 1
+                    else:
+                        if counter != 0:
+                            persistances_by_hbond[hb_linker].append(counter)
+                            counter = 0
+
+                if counter != 0:
+                    persistances_by_hbond[hb_linker].append(counter)
+
+    return persistances_by_hbond
